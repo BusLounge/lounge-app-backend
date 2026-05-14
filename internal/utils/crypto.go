@@ -1,15 +1,15 @@
 package utils
 
 import (
-    "crypto/aes"
-    "crypto/cipher"
-    "crypto/rand"
-    "encoding/base64"
-    "encoding/hex"
-    "errors"
-    "fmt"
-    "io"
-    "os"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"os"
 )
 
 // getEncryptionKey reads ENCRYPTION_KEY from environment and returns 32-byte key.

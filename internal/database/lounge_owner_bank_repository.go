@@ -1,14 +1,14 @@
 package database
 
 import (
-    "database/sql"
-    "fmt"
-    "time"
+	"database/sql"
+	"fmt"
+	"time"
 
-    "github.com/google/uuid"
-    "github.com/jmoiron/sqlx"
-    "github.com/smarttransit/sms-auth-backend/internal/models"
-    "github.com/smarttransit/sms-auth-backend/internal/utils"
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+	"github.com/smarttransit/sms-auth-backend/internal/models"
+	"github.com/smarttransit/sms-auth-backend/internal/utils"
 )
 
 // LoungeOwnerBankDetailsRepository handles bank details storage

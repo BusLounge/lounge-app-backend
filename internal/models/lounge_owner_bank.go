@@ -1,9 +1,9 @@
 package models
 
 import (
-    "time"
+	"time"
 
-    "github.com/google/uuid"
+	"github.com/google/uuid"
 )
 
 // LoungeOwnerBankDetails represents decrypted bank details returned by the API

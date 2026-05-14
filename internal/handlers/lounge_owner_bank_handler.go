@@ -1,14 +1,14 @@
 package handlers
 
 import (
-    "log"
-    "net/http"
+	"log"
+	"net/http"
 
-    "github.com/gin-gonic/gin"
-    "github.com/google/uuid"
-    "github.com/smarttransit/sms-auth-backend/internal/database"
-    "github.com/smarttransit/sms-auth-backend/internal/middleware"
-    "github.com/smarttransit/sms-auth-backend/internal/models"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/smarttransit/sms-auth-backend/internal/database"
+	"github.com/smarttransit/sms-auth-backend/internal/middleware"
+	"github.com/smarttransit/sms-auth-backend/internal/models"
 )
 
 // LoungeOwnerBankHandler handles bank details and link APIs
