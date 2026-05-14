@@ -532,6 +532,18 @@ func main() {
 		}
 		logger.Info("🔐 Admin Authentication routes registered successfully")
 
+		// Lounge OTP tracking routes (admin only)
+		logger.Info("🔐 Registering Lounge OTP tracking routes...")
+		otpMaster := v1.Group("/admin/otp-master")
+		otpMaster.Use(middleware.AuthMiddleware(jwtService))
+		{
+			logger.Info("  ✅ POST /api/v1/admin/otp-master")
+			otpMaster.POST("", authHandler.RecordOTPMaster)
+			logger.Info("  ✅ GET /api/v1/admin/otp-master")
+			otpMaster.GET("", authHandler.GetOTPMasterRecords)
+		}
+		logger.Info("🔐 Lounge OTP tracking routes registered successfully")
+
 		// Bus Seat Layout routes (admin only)
 		logger.Info("🚌 Registering Bus Seat Layout routes...")
 		busSeatLayout := v1.Group("/admin/seat-layouts")

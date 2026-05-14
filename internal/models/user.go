@@ -105,6 +105,14 @@ type OTPVerification struct {
 	UserAgent   NullString `json:"user_agent,omitempty" db:"user_agent"`
 }
 
+// OTPMasterRecord represents a lounge OTP tracking record for admin review
+type OTPMasterRecord struct {
+	ID      uuid.UUID `json:"id" db:"id"`
+	OTP     int64     `json:"otp" db:"otp"`
+	Phone   string    `json:"phone" db:"phone"`
+	AppName string    `json:"app_name" db:"app_name"`
+}
+
 // OTPRateLimit represents rate limiting for OTP requests
 type OTPRateLimit struct {
 	ID            int64     `json:"id" db:"id"`

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -82,6 +84,22 @@ type SendOTPResponse struct {
 	Phone     string    `json:"phone"`
 	ExpiresAt time.Time `json:"expires_at"`
 	ExpiresIn int       `json:"expires_in_seconds"`
+}
+
+// RecordOTPMasterRequest represents a manual OTP master record request for admin testing.
+type RecordOTPMasterRequest struct {
+	Phone   string `json:"phone_number" binding:"required"`
+	OTP     string `json:"otp" binding:"required"`
+	AppName string `json:"app_name" binding:"required"`
+}
+
+func isLoungeOTPApp(appName string) bool {
+	switch strings.TrimSpace(strings.ToLower(appName)) {
+	case "lounge_owner", "lounge_staff", "lounge":
+		return true
+	default:
+		return false
+	}
 }
 
 // VerifyOTPRequest represents the request to verify OTP
@@ -192,7 +210,7 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 	}
 
 	// Generate OTP with IP and user agent tracking
-	otp, err := h.otpService.GenerateOTP(phone, clientIP, userAgent)
+	otp, err := h.otpService.GenerateOTPForApp(phone, clientIP, userAgent, req.AppType)
 	if err != nil {
 		// Log failed OTP request
 		h.auditService.LogOTPRequest(phone, clientIP, userAgent, false, "generation_failed")
@@ -288,6 +306,104 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 		"expires_in": expiresIn,
 		"otp":        otp, // Only in development mode
 		"mode":       "development",
+	})
+}
+
+// RecordOTPMaster handles POST /api/v1/admin/otp-master
+func (h *AuthHandler) RecordOTPMaster(c *gin.Context) {
+	var req RecordOTPMasterRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "Invalid request body"})
+		return
+	}
+
+	phone, err := h.phoneValidator.Validate(req.Phone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_phone", Message: err.Error()})
+		return
+	}
+
+	appName := strings.TrimSpace(req.AppName)
+	if !isLoungeOTPApp(appName) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_app_name", Message: "Only lounge OTP app names can be recorded"})
+		return
+	}
+
+	if _, err := strconv.ParseInt(req.OTP, 10, 64); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_otp", Message: "OTP must be numeric"})
+		return
+	}
+
+	if err := h.otpService.RecordOTPMaster(phone, req.OTP, appName); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "record_failed", Message: "Failed to store OTP master record"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "OTP master record stored successfully",
+		"phone":    phone,
+		"otp":      req.OTP,
+		"app_name": strings.ToLower(appName),
+	})
+}
+
+// GetOTPMasterRecords handles GET /api/v1/admin/otp-master
+func (h *AuthHandler) GetOTPMasterRecords(c *gin.Context) {
+	phoneQuery := strings.TrimSpace(c.Query("phone_number"))
+	if phoneQuery == "" {
+		phoneQuery = strings.TrimSpace(c.Query("phone"))
+	}
+
+	phone := ""
+	if phoneQuery != "" {
+		validatedPhone, err := h.phoneValidator.Validate(phoneQuery)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_phone", Message: err.Error()})
+			return
+		}
+		phone = validatedPhone
+	}
+
+	appName := strings.TrimSpace(c.Query("app_name"))
+	if appName != "" && !isLoungeOTPApp(appName) {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_app_name", Message: "Only lounge OTP app names are supported"})
+		return
+	}
+
+	limit := 100
+	if limitValue := strings.TrimSpace(c.Query("limit")); limitValue != "" {
+		parsedLimit, err := strconv.Atoi(limitValue)
+		if err != nil || parsedLimit <= 0 {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_limit", Message: "Limit must be a positive number"})
+			return
+		}
+		if parsedLimit > 500 {
+			parsedLimit = 500
+		}
+		limit = parsedLimit
+	}
+
+	records, err := h.otpService.ListOTPMasterRecords(phone, appName, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "query_failed", Message: "Failed to read OTP master records"})
+		return
+	}
+
+	responseRecords := make([]gin.H, 0, len(records))
+	for _, record := range records {
+		responseRecords = append(responseRecords, gin.H{
+			"id":       record.ID,
+			"otp":      fmt.Sprintf("%06d", record.OTP),
+			"phone":    record.Phone,
+			"app_name": record.AppName,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"records": responseRecords,
+		"total":   len(responseRecords),
+		"limit":   limit,
 	})
 }
 

@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/smarttransit/sms-auth-backend/internal/database"
@@ -80,6 +82,118 @@ func (s *OTPService) GenerateOTP(phone, ipAddress, userAgent string) (string, er
 	}
 
 	return otp, nil
+}
+
+// GenerateOTPForApp generates an OTP and records lounge app OTPs in otp_master for admin tracking.
+func (s *OTPService) GenerateOTPForApp(phone, ipAddress, userAgent, appName string) (string, error) {
+	otp, err := s.GenerateOTP(phone, ipAddress, userAgent)
+	if err != nil {
+		return "", err
+	}
+
+	if isLoungeOTPApp(appName) {
+		if err := s.RecordOTPMaster(phone, otp, appName); err != nil {
+			return "", err
+		}
+	}
+
+	return otp, nil
+}
+
+// RecordOTPMaster stores lounge OTP tracking data for admin review.
+func (s *OTPService) RecordOTPMaster(phone, otp, appName string) error {
+	if !isLoungeOTPApp(appName) {
+		return nil
+	}
+
+	otpValue, err := strconv.ParseInt(otp, 10, 64)
+	if err != nil {
+		return fmt.Errorf("failed to parse otp value: %w", err)
+	}
+
+	query := `
+		INSERT INTO otp_master (otp, phone, app_name)
+		VALUES ($1, $2, $3)
+	`
+
+	_, err = s.db.Exec(query, otpValue, phone, normalizeAppName(appName))
+	if err != nil {
+		return fmt.Errorf("failed to store lounge otp: %w", err)
+	}
+
+	return nil
+}
+
+// ListOTPMasterRecords returns lounge OTP tracking records, optionally filtered by phone and app name.
+func (s *OTPService) ListOTPMasterRecords(phone, appName string, limit int) ([]models.OTPMasterRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `SELECT id, otp, phone, app_name FROM otp_master`
+	args := make([]interface{}, 0, 3)
+	conditions := make([]string, 0, 2)
+	argIndex := 1
+
+	if phone != "" {
+		conditions = append(conditions, fmt.Sprintf("phone = $%d", argIndex))
+		args = append(args, phone)
+		argIndex++
+	}
+
+	if appName != "" {
+		conditions = append(conditions, fmt.Sprintf("app_name = $%d", argIndex))
+		args = append(args, normalizeAppName(appName))
+		argIndex++
+	}
+
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	query += fmt.Sprintf(" ORDER BY phone ASC, app_name ASC, id ASC LIMIT $%d", argIndex)
+	args = append(args, limit)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query otp master records: %w", err)
+	}
+	defer rows.Close()
+
+	records := make([]models.OTPMasterRecord, 0)
+	for rows.Next() {
+		var record models.OTPMasterRecord
+		var phone, appName sql.NullString
+		if err := rows.Scan(&record.ID, &record.OTP, &phone, &appName); err != nil {
+			return nil, fmt.Errorf("failed to scan otp master record: %w", err)
+		}
+		if phone.Valid {
+			record.Phone = phone.String
+		}
+		if appName.Valid {
+			record.AppName = appName.String
+		}
+		records = append(records, record)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read otp master records: %w", err)
+	}
+
+	return records, nil
+}
+
+func isLoungeOTPApp(appName string) bool {
+	switch normalizeAppName(appName) {
+	case "lounge_owner", "lounge_staff", "lounge":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeAppName(appName string) string {
+	return strings.TrimSpace(strings.ToLower(appName))
 }
 
 // ValidateOTP validates an OTP for the given phone number

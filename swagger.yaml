@@ -20,9 +20,10 @@ info:
        - `/auth/verify-otp-staff` - for staff (driver/conductor)
        - `/auth/verify-otp-lounge-owner` - for lounge owners
        - `/auth/verify-otp-lounge-staff` - for lounge staff
-    3. Receive JWT access & refresh tokens
-    4. Use access token for protected endpoints
-    5. Refresh token when access token expires
+     3. Lounge OTPs are tracked for admin review in `otp_master`
+     4. Receive JWT access & refresh tokens
+     5. Use access token for protected endpoints
+     6. Refresh token when access token expires
 
     ## Staff Employment Model
     Staff members (drivers/conductors) have a separated profile and employment structure:
@@ -92,6 +93,8 @@ tags:
     description: SMS OTP authentication endpoints
   - name: Admin Authentication
     description: Admin dashboard authentication endpoints (email/password based)
+  - name: OTP Master
+    description: Lounge OTP tracking endpoints for admin review and testing
   - name: User
     description: User profile management
   - name: Staff
@@ -267,6 +270,8 @@ paths:
         **Development Mode:** If SMS_MODE=dev, OTP is returned in response.
 
         **Production Mode:** OTP is sent via Dialog SMS Gateway.
+
+        **Lounge Tracking:** If `app_type` is set to a lounge value, the OTP is also recorded in `otp_master` for admin review.
       operationId: sendOtp
       tags:
         - Authentication
@@ -285,6 +290,12 @@ paths:
                   description: Sri Lankan phone number in E.164 format
                   pattern: '^\+94[0-9]{9}$'
                   example: "+94771234567"
+                app_type:
+                  type: string
+                  description: Application type used to route and track the OTP
+                  enum:
+                    [passenger, driver, conductor, lounge_owner, lounge_staff]
+                  example: lounge_owner
       responses:
         "200":
           description: OTP sent successfully
@@ -1510,6 +1521,98 @@ paths:
                   $ref: "#/components/schemas/AdminUser"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/admin/otp-master:
+    get:
+      summary: List lounge OTP master records
+      description: |
+        Returns OTP records captured for lounge apps. This endpoint is intended for admin testing and tracking.
+
+        **Filtering:**
+        - `phone_number` or `phone` to filter by phone number
+        - `app_name` to filter by lounge app type (`lounge_owner`, `lounge_staff`, `lounge`)
+        - `limit` to cap the number of records returned
+      operationId: listOtpMasterRecords
+      tags:
+        - OTP Master
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: phone_number
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\+94[0-9]{9}$'
+          description: Phone number to filter by
+        - name: phone
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\+94[0-9]{9}$'
+          description: Alias for phone_number filter
+        - name: app_name
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [lounge_owner, lounge_staff, lounge]
+          description: Lounge app name filter
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+          description: Maximum records to return
+      responses:
+        "200":
+          description: OTP master records retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OTPMasterRecordListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      summary: Manually record a lounge OTP
+      description: |
+        Stores a lounge OTP record for admin testing or reconciliation.
+
+        **Rules:**
+        - `app_name` must be a lounge value (`lounge_owner`, `lounge_staff`, `lounge`)
+        - `otp` must be numeric
+      operationId: createOtpMasterRecord
+      tags:
+        - OTP Master
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OTPMasterRecordRequest"
+      responses:
+        "200":
+          description: OTP master record stored successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OTPMasterRecordResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   # ============================================================================
   # Bus Seat Layout Endpoints
@@ -14453,6 +14556,77 @@ components:
           $ref: "#/components/schemas/BusStaff"
         bus_owner:
           $ref: "#/components/schemas/BusOwner"
+
+    OTPMasterRecord:
+      type: object
+      description: Lounge OTP tracking record stored for admin review
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        otp:
+          type: string
+          description: 6-digit OTP value stored as numeric text
+          example: "123456"
+        phone:
+          type: string
+          pattern: '^\+94[0-9]{9}$'
+          example: "+94771234567"
+        app_name:
+          type: string
+          example: lounge_owner
+
+    OTPMasterRecordRequest:
+      type: object
+      required:
+        - phone_number
+        - otp
+        - app_name
+      properties:
+        phone_number:
+          type: string
+          pattern: '^\+94[0-9]{9}$'
+          example: "+94771234567"
+        otp:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "123456"
+        app_name:
+          type: string
+          enum: [lounge_owner, lounge_staff, lounge]
+          example: lounge_owner
+
+    OTPMasterRecordResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: OTP master record stored successfully
+        phone:
+          type: string
+          pattern: '^\+94[0-9]{9}$'
+          example: "+94771234567"
+        otp:
+          type: string
+          example: "123456"
+        app_name:
+          type: string
+          example: lounge_owner
+
+    OTPMasterRecordListResponse:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/OTPMasterRecord"
+        total:
+          type: integer
+          example: 12
+        limit:
+          type: integer
+          example: 100
 
     Error:
       type: object

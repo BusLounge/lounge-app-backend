@@ -38,10 +38,10 @@ func TestGenerateOTP(t *testing.T) {
 
 	// Expect insert query
 	mock.ExpectExec("INSERT INTO otp_verifications").
-		WithArgs(phone, sqlmock.AnyArg(), sqlmock.AnyArg(), MaxOTPAttempts).
+		WithArgs(phone, sqlmock.AnyArg(), sqlmock.AnyArg(), MaxOTPAttempts, "192.168.1.1", "Mozilla/5.0").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	otp, err := service.GenerateOTP(phone, "192.168.1.1", "Mozilla/5.0")
+	otp, err := service.GenerateOTPForApp(phone, "192.168.1.1", "Mozilla/5.0", "passenger")
 	require.NoError(t, err)
 	assert.Len(t, otp, 6)
 	assert.Regexp(t, "^[0-9]{6}$", otp)
@@ -68,16 +68,41 @@ func TestGenerateOTP_Uniqueness(t *testing.T) {
 
 		// Expect insert query
 		mock.ExpectExec("INSERT INTO otp_verifications").
-			WithArgs(phone, sqlmock.AnyArg(), sqlmock.AnyArg(), MaxOTPAttempts).
+			WithArgs(phone, sqlmock.AnyArg(), sqlmock.AnyArg(), MaxOTPAttempts, "192.168.1.1", "Mozilla/5.0").
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
-		otp, err := service.GenerateOTP(phone, "192.168.1.1", "Mozilla/5.0")
+		otp, err := service.GenerateOTPForApp(phone, "192.168.1.1", "Mozilla/5.0", "passenger")
 		require.NoError(t, err)
 		otps[otp] = true
 	}
 
 	// Should generate different OTPs (at least 80% unique)
 	assert.Greater(t, len(otps), 80)
+}
+
+func TestGenerateOTPForApp_RecordsLoungeApp(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	mockDB := &mockDatabase{db: db}
+	service := NewOTPService(mockDB)
+	phone := "0771234567"
+
+	mock.ExpectExec("UPDATE otp_verifications").
+		WithArgs(phone).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO otp_verifications").
+		WithArgs(phone, sqlmock.AnyArg(), sqlmock.AnyArg(), MaxOTPAttempts, "192.168.1.1", "Mozilla/5.0").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO otp_master").
+		WithArgs(sqlmock.AnyArg(), phone, "lounge_owner").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	otp, err := service.GenerateOTPForApp(phone, "192.168.1.1", "Mozilla/5.0", "lounge_owner")
+	require.NoError(t, err)
+	assert.Len(t, otp, 6)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestValidateOTP_Success(t *testing.T) {
