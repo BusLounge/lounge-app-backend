@@ -4836,7 +4836,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BankDetailsRequest'
+                $ref: "#/components/schemas/BankDetailsRequest"
         responses:
           "201":
             description: Bank details created
@@ -4846,13 +4846,13 @@ paths:
                   type: object
                   properties:
                     bank_details:
-                      $ref: '#/components/schemas/BankDetailsResponse'
+                      $ref: "#/components/schemas/BankDetailsResponse"
           "400":
-            $ref: '#/components/responses/BadRequest'
+            $ref: "#/components/responses/BadRequest"
           "401":
-            $ref: '#/components/responses/Unauthorized'
+            $ref: "#/components/responses/Unauthorized"
           "500":
-            $ref: '#/components/responses/InternalServerError'
+            $ref: "#/components/responses/InternalServerError"
 
     /api/v1/lounge-owner/bank-details/{id}:
       get:
@@ -4879,15 +4879,15 @@ paths:
                   type: object
                   properties:
                     bank_details:
-                      $ref: '#/components/schemas/BankDetailsResponse'
+                      $ref: "#/components/schemas/BankDetailsResponse"
           "400":
-            $ref: '#/components/responses/BadRequest'
+            $ref: "#/components/responses/BadRequest"
           "401":
-            $ref: '#/components/responses/Unauthorized'
+            $ref: "#/components/responses/Unauthorized"
           "404":
             description: Bank details not found
           "500":
-            $ref: '#/components/responses/InternalServerError'
+            $ref: "#/components/responses/InternalServerError"
       put:
         summary: Update lounge owner bank details
         description: Update bank details. Provide plaintext sensitive fields; server will encrypt them before storing.
@@ -4908,7 +4908,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BankDetailsRequest'
+                $ref: "#/components/schemas/BankDetailsRequest"
         responses:
           "200":
             description: Updated successfully
@@ -4921,13 +4921,13 @@ paths:
                       type: string
                       example: "updated"
           "400":
-            $ref: '#/components/responses/BadRequest'
+            $ref: "#/components/responses/BadRequest"
           "401":
-            $ref: '#/components/responses/Unauthorized'
+            $ref: "#/components/responses/Unauthorized"
           "404":
             description: Bank details not found
           "500":
-            $ref: '#/components/responses/InternalServerError'
+            $ref: "#/components/responses/InternalServerError"
       delete:
         summary: Delete lounge owner bank details
         operationId: deleteLoungeOwnerBankDetails
@@ -4954,25 +4954,25 @@ paths:
                       type: string
                       example: "deleted"
           "400":
-            $ref: '#/components/responses/BadRequest'
+            $ref: "#/components/responses/BadRequest"
           "401":
-            $ref: '#/components/responses/Unauthorized'
+            $ref: "#/components/responses/Unauthorized"
           "404":
             description: Bank details not found
           "500":
-            $ref: '#/components/responses/InternalServerError'
+            $ref: "#/components/responses/InternalServerError"
 
     /api/v1/lounge-owner/bank-links:
       post:
         summary: Create a bank link (associate bank details to owner/lounge)
         description: |
           Create a link between a lounge owner and bank details.
-          
+
           **Important**: The `owner_id` is automatically resolved by the backend:
           1. Backend extracts `user_id` from JWT token
           2. Backend looks up `lounge_owners` table to find the `lounge_owner.id` matching the `user_id`
           3. Backend uses that `lounge_owner.id` as the `owner_id` in the link
-          
+
           The frontend only needs to provide `bank_details_id` and optionally `lounge_id`.
         operationId: createLoungeOwnerBankLink
         tags:
@@ -4984,7 +4984,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BankLinkRequest'
+                $ref: "#/components/schemas/BankLinkRequest"
         responses:
           "201":
             description: Bank link created
@@ -4994,18 +4994,18 @@ paths:
                   type: object
                   properties:
                     bank_link:
-                      $ref: '#/components/schemas/BankLinkResponse'
+                      $ref: "#/components/schemas/BankLinkResponse"
           "400":
-            $ref: '#/components/responses/BadRequest'
+            $ref: "#/components/responses/BadRequest"
           "401":
-            $ref: '#/components/responses/Unauthorized'
+            $ref: "#/components/responses/Unauthorized"
           "500":
-            $ref: '#/components/responses/InternalServerError'
+            $ref: "#/components/responses/InternalServerError"
       get:
         summary: List bank links for current lounge owner
         description: |
           Retrieve all bank links for the authenticated lounge owner.
-          
+
           The API automatically filters links by the lounge owner resolved from the JWT token's `user_id`.
           Each link includes the associated bank details with decrypted sensitive fields.
         operationId: listLoungeOwnerBankLinks
@@ -5024,11 +5024,11 @@ paths:
                     bank_links:
                       type: array
                       items:
-                        $ref: '#/components/schemas/BankLinkWithDetails'
+                        $ref: "#/components/schemas/BankLinkWithDetails"
           "401":
-            $ref: '#/components/responses/Unauthorized'
+            $ref: "#/components/responses/Unauthorized"
           "500":
-            $ref: '#/components/responses/InternalServerError'
+            $ref: "#/components/responses/InternalServerError"
 
     /api/v1/lounge-owner/bank-links/{id}:
       delete:
@@ -5057,27 +5057,13 @@ paths:
                       type: string
                       example: "deleted"
           "400":
-            $ref: '#/components/responses/BadRequest'
+            $ref: "#/components/responses/BadRequest"
           "401":
-            $ref: '#/components/responses/Unauthorized'
+            $ref: "#/components/responses/Unauthorized"
           "404":
             description: Bank link not found
           "500":
-            $ref: '#/components/responses/InternalServerError'
-                  registration_step:
-                    type: string
-                    example: "completed"
-                    description: "Registration is now complete"
-                  profile_completed:
-                    type: boolean
-                    example: true
-                    description: "Profile completion status"
-                  status:
-                    type: string
-                    example: "pending"
-                    description: "Lounge approval status (pending admin review)"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+            $ref: "#/components/responses/InternalServerError"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "500":
@@ -12176,16 +12162,6 @@ paths:
             type: string
             format: uuid
           description: ID of the manual booking
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                reason:
-                  type: string
-                  description: Reason for cancellation
-                  example: "Passenger no-show"
       responses:
         "200":
           description: Booking cancelled successfully
@@ -13604,7 +13580,7 @@ components:
       type: object
       description: |
         Request payload to create or update lounge owner bank details.
-        
+
         **Encryption**: Sensitive fields (`ac_holder_name`, `ac_number`, `swift_code`) must be sent in plaintext by the frontend.
         The backend will encrypt them using AES-256-GCM before storing in the database.
         The encryption key (`ENCRYPTION_KEY`) is server-only and never exposed to the frontend.
@@ -13650,7 +13626,7 @@ components:
       type: object
       description: |
         Response payload containing bank details.
-        
+
         Sensitive fields (`ac_holder_name`, `ac_number`, `swift_code`) are returned decrypted by the server for frontend use.
         The frontend receives plaintext and can display/use these values directly.
       properties:
@@ -13690,7 +13666,7 @@ components:
       type: object
       description: |
         Request to create a bank link.
-        
+
         The `owner_id` is NOT sent by the frontend. Instead, the backend automatically resolves it:
         1. Receives JWT token with `user_id`
         2. Queries `lounge_owners` table to find the lounge owner record (where `user_id = JWT.user_id`)
@@ -13734,19 +13710,9 @@ components:
       description: Bank link combined with its associated bank details (decrypted).
       properties:
         link:
-          $ref: '#/components/schemas/BankLinkResponse'
+          $ref: "#/components/schemas/BankLinkResponse"
         bank_details:
-          $ref: '#/components/schemas/BankDetailsResponse'
-          example: true
-          description: Whether booking has been verified by conductor
-        special_requirements:
-          type: string
-          nullable: true
-          example: "Wheelchair accessible"
-        created_at:
-          type: string
-          format: date-time
-          example: "2025-02-09T08:00:00Z"
+          $ref: "#/components/schemas/BankDetailsResponse"
 
     User:
       type: object
