@@ -4965,7 +4965,15 @@ paths:
     /api/v1/lounge-owner/bank-links:
       post:
         summary: Create a bank link (associate bank details to owner/lounge)
-        description: Create a link between a lounge owner (current authenticated user) and bank details. `lounge_id` is optional.
+        description: |
+          Create a link between a lounge owner and bank details.
+          
+          **Important**: The `owner_id` is automatically resolved by the backend:
+          1. Backend extracts `user_id` from JWT token
+          2. Backend looks up `lounge_owners` table to find the `lounge_owner.id` matching the `user_id`
+          3. Backend uses that `lounge_owner.id` as the `owner_id` in the link
+          
+          The frontend only needs to provide `bank_details_id` and optionally `lounge_id`.
         operationId: createLoungeOwnerBankLink
         tags:
           - Lounge Owner
@@ -4995,6 +5003,11 @@ paths:
             $ref: '#/components/responses/InternalServerError'
       get:
         summary: List bank links for current lounge owner
+        description: |
+          Retrieve all bank links for the authenticated lounge owner.
+          
+          The API automatically filters links by the lounge owner resolved from the JWT token's `user_id`.
+          Each link includes the associated bank details with decrypted sensitive fields.
         operationId: listLoungeOwnerBankLinks
         tags:
           - Lounge Owner
@@ -13589,7 +13602,12 @@ components:
           example: "Doe"
     BankDetailsRequest:
       type: object
-      description: Request payload to create or update lounge owner bank details. Sensitive fields should be sent in plaintext; they are encrypted server-side.
+      description: |
+        Request payload to create or update lounge owner bank details.
+        
+        **Encryption**: Sensitive fields (`ac_holder_name`, `ac_number`, `swift_code`) must be sent in plaintext by the frontend.
+        The backend will encrypt them using AES-256-GCM before storing in the database.
+        The encryption key (`ENCRYPTION_KEY`) is server-only and never exposed to the frontend.
       required:
         - bank_name
         - branch_name
@@ -13601,52 +13619,66 @@ components:
         bank_name:
           type: string
           example: "People's Bank"
+          description: "Non-sensitive bank name. Stored in plaintext."
         branch_name:
           type: string
           example: "Galle Road Branch"
+          description: "Non-sensitive branch name. Stored in plaintext."
         branch_code:
           type: string
           example: "GR001"
+          description: "Non-sensitive branch code. Stored in plaintext."
         ac_type:
           type: string
           example: "savings"
+          description: "Non-sensitive account type (e.g., savings, current). Stored in plaintext."
         ac_holder_name:
           type: string
           example: "Jane Doe"
-          description: "Plaintext account holder name. Sent by frontend; encrypted server-side before storage."
+          description: "SENSITIVE: Account holder name sent plaintext. Server encrypts using AES-256-GCM before storage."
         ac_number:
           type: string
           example: "1234567890"
-          description: "Plaintext account number. Sent by frontend; encrypted server-side before storage."
+          description: "SENSITIVE: Account number sent plaintext. Server encrypts using AES-256-GCM before storage."
         swift_code:
           type: string
           nullable: true
           example: "ABCDLK2L"
-          description: "Optional. If empty, stored as NULL in DB."
+          description: "SENSITIVE (optional): Swift/IBAN code sent plaintext. Server encrypts using AES-256-GCM. If empty or null, stored as NULL in DB."
 
     BankDetailsResponse:
       type: object
+      description: |
+        Response payload containing bank details.
+        
+        Sensitive fields (`ac_holder_name`, `ac_number`, `swift_code`) are returned decrypted by the server for frontend use.
+        The frontend receives plaintext and can display/use these values directly.
       properties:
         id:
           type: string
           format: uuid
         bank_name:
           type: string
+          description: "Non-sensitive bank name."
         branch_name:
           type: string
+          description: "Non-sensitive branch name."
         branch_code:
           type: string
+          description: "Non-sensitive branch code."
         ac_type:
           type: string
+          description: "Non-sensitive account type."
         ac_holder_name:
           type: string
-          description: "Decrypted account holder name (server-side decryption)."
+          description: "DECRYPTED: Account holder name decrypted by server. Safe to use/display on frontend."
         ac_number:
           type: string
-          description: "Decrypted account number (server-side decryption)."
+          description: "DECRYPTED: Account number decrypted by server. Safe to use/display on frontend."
         swift_code:
           type: string
           nullable: true
+          description: "DECRYPTED (optional): Swift code decrypted by server. Null if not set during creation/update."
         created_at:
           type: string
           format: date-time
@@ -13656,6 +13688,13 @@ components:
 
     BankLinkRequest:
       type: object
+      description: |
+        Request to create a bank link.
+        
+        The `owner_id` is NOT sent by the frontend. Instead, the backend automatically resolves it:
+        1. Receives JWT token with `user_id`
+        2. Queries `lounge_owners` table to find the lounge owner record (where `user_id = JWT.user_id`)
+        3. Uses the lounge owner's `id` field as the `owner_id` in the link
       required:
         - bank_details_id
       properties:
@@ -13668,6 +13707,7 @@ components:
           format: uuid
           nullable: true
           example: "550e8400-e29b-41d4-a716-446655440000"
+          description: "Optional. If provided, the link associates the bank details with a specific lounge."
 
     BankLinkResponse:
       type: object
@@ -13691,63 +13731,12 @@ components:
 
     BankLinkWithDetails:
       type: object
+      description: Bank link combined with its associated bank details (decrypted).
       properties:
         link:
           $ref: '#/components/schemas/BankLinkResponse'
         bank_details:
           $ref: '#/components/schemas/BankDetailsResponse'
-        full_name:
-          type: string
-          example: "John Doe"
-        phone:
-          type: string
-          example: "+94771234567"
-        email:
-          type: string
-          format: email
-          nullable: true
-          example: "john.doe@example.com"
-        seat_number:
-          type: string
-          example: "A12"
-          description: Assigned seat number
-        boarding_stop:
-          type: string
-          example: "Colombo Fort"
-          description: Where passenger boards
-        destination_stop:
-          type: string
-          example: "Kandy"
-          description: Where passenger alights
-        boarding_time:
-          type: string
-          format: time
-          example: "08:30:00"
-          description: Scheduled boarding time
-        fare:
-          type: number
-          format: double
-          example: 450.00
-          description: Ticket fare amount
-        status:
-          type: string
-          enum: [pending, confirmed, boarded, in-transit, completed, cancelled]
-          example: "boarded"
-          description: Current passenger status
-        boarded_at:
-          type: string
-          format: date-time
-          nullable: true
-          example: "2025-02-09T08:35:00Z"
-          description: Actual boarding timestamp
-        completed_at:
-          type: string
-          format: date-time
-          nullable: true
-          example: "2025-02-09T12:15:00Z"
-          description: Actual completion/alighting timestamp
-        is_verified:
-          type: boolean
           example: true
           description: Whether booking has been verified by conductor
         special_requirements:
