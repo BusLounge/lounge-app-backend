@@ -4822,248 +4822,249 @@ paths:
                     type: string
                     format: uuid
                     example: "d581c281-ba77-49d2-8f68-5f7377417bf8"
-    /api/v1/lounge-owner/bank-details:
-      post:
-        summary: Create lounge owner bank details
-        description: Create bank account details for a lounge owner. Sensitive fields (`ac_holder_name`, `ac_number`, `swift_code`) are sent in plaintext by the frontend and encrypted on the server before storage.
-        operationId: createLoungeOwnerBankDetails
-        tags:
-          - Lounge Owner
-        security:
-          - BearerAuth: []
-        requestBody:
-          required: true
+
+  /api/v1/lounge-owner/bank-details:
+    post:
+      summary: Create lounge owner bank details
+      description: Create bank account details for a lounge owner. Sensitive fields (`ac_holder_name`, `ac_number`, `swift_code`) are sent in plaintext by the frontend and encrypted on the server before storage.
+      operationId: createLoungeOwnerBankDetails
+      tags:
+        - Lounge Owner
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankDetailsRequest"
+      responses:
+        "201":
+          description: Bank details created
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BankDetailsRequest"
-        responses:
-          "201":
-            description: Bank details created
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    bank_details:
-                      $ref: "#/components/schemas/BankDetailsResponse"
-          "400":
-            $ref: "#/components/responses/BadRequest"
-          "401":
-            $ref: "#/components/responses/Unauthorized"
-          "500":
-            $ref: "#/components/responses/InternalServerError"
+                type: object
+                properties:
+                  bank_details:
+                    $ref: "#/components/schemas/BankDetailsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
-    /api/v1/lounge-owner/bank-details/{id}:
-      get:
-        summary: Get lounge owner bank details
-        description: Retrieve decrypted bank details. The server decrypts sensitive fields before returning them.
-        operationId: getLoungeOwnerBankDetails
-        tags:
-          - Lounge Owner
-        security:
-          - BearerAuth: []
-        parameters:
-          - name: id
-            in: path
-            required: true
-            schema:
-              type: string
-              format: uuid
-        responses:
-          "200":
-            description: Bank details retrieved
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    bank_details:
-                      $ref: "#/components/schemas/BankDetailsResponse"
-          "400":
-            $ref: "#/components/responses/BadRequest"
-          "401":
-            $ref: "#/components/responses/Unauthorized"
-          "404":
-            description: Bank details not found
-          "500":
-            $ref: "#/components/responses/InternalServerError"
-      put:
-        summary: Update lounge owner bank details
-        description: Update bank details. Provide plaintext sensitive fields; server will encrypt them before storing.
-        operationId: updateLoungeOwnerBankDetails
-        tags:
-          - Lounge Owner
-        security:
-          - BearerAuth: []
-        parameters:
-          - name: id
-            in: path
-            required: true
-            schema:
-              type: string
-              format: uuid
-        requestBody:
+  /api/v1/lounge-owner/bank-details/{id}:
+    get:
+      summary: Get lounge owner bank details
+      description: Retrieve decrypted bank details. The server decrypts sensitive fields before returning them.
+      operationId: getLoungeOwnerBankDetails
+      tags:
+        - Lounge Owner
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
           required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Bank details retrieved
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BankDetailsRequest"
-        responses:
-          "200":
-            description: Updated successfully
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    message:
-                      type: string
-                      example: "updated"
-          "400":
-            $ref: "#/components/responses/BadRequest"
-          "401":
-            $ref: "#/components/responses/Unauthorized"
-          "404":
-            description: Bank details not found
-          "500":
-            $ref: "#/components/responses/InternalServerError"
-      delete:
-        summary: Delete lounge owner bank details
-        operationId: deleteLoungeOwnerBankDetails
-        tags:
-          - Lounge Owner
-        security:
-          - BearerAuth: []
-        parameters:
-          - name: id
-            in: path
-            required: true
-            schema:
-              type: string
-              format: uuid
-        responses:
-          "200":
-            description: Deleted successfully
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    message:
-                      type: string
-                      example: "deleted"
-          "400":
-            $ref: "#/components/responses/BadRequest"
-          "401":
-            $ref: "#/components/responses/Unauthorized"
-          "404":
-            description: Bank details not found
-          "500":
-            $ref: "#/components/responses/InternalServerError"
-
-    /api/v1/lounge-owner/bank-links:
-      post:
-        summary: Create a bank link (associate bank details to owner/lounge)
-        description: |
-          Create a link between a lounge owner and bank details.
-
-          **Important**: The `owner_id` is automatically resolved by the backend:
-          1. Backend extracts `user_id` from JWT token
-          2. Backend looks up `lounge_owners` table to find the `lounge_owner.id` matching the `user_id`
-          3. Backend uses that `lounge_owner.id` as the `owner_id` in the link
-
-          The frontend only needs to provide `bank_details_id` and optionally `lounge_id`.
-        operationId: createLoungeOwnerBankLink
-        tags:
-          - Lounge Owner
-        security:
-          - BearerAuth: []
-        requestBody:
+                type: object
+                properties:
+                  bank_details:
+                    $ref: "#/components/schemas/BankDetailsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Bank details not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      summary: Update lounge owner bank details
+      description: Update bank details. Provide plaintext sensitive fields; server will encrypt them before storing.
+      operationId: updateLoungeOwnerBankDetails
+      tags:
+        - Lounge Owner
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
           required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BankDetailsRequest"
+      responses:
+        "200":
+          description: Updated successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BankLinkRequest"
-        responses:
-          "201":
-            description: Bank link created
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    bank_link:
-                      $ref: "#/components/schemas/BankLinkResponse"
-          "400":
-            $ref: "#/components/responses/BadRequest"
-          "401":
-            $ref: "#/components/responses/Unauthorized"
-          "500":
-            $ref: "#/components/responses/InternalServerError"
-      get:
-        summary: List bank links for current lounge owner
-        description: |
-          Retrieve all bank links for the authenticated lounge owner.
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "updated"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Bank details not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      summary: Delete lounge owner bank details
+      operationId: deleteLoungeOwnerBankDetails
+      tags:
+        - Lounge Owner
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "deleted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Bank details not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
-          The API automatically filters links by the lounge owner resolved from the JWT token's `user_id`.
-          Each link includes the associated bank details with decrypted sensitive fields.
-        operationId: listLoungeOwnerBankLinks
-        tags:
-          - Lounge Owner
-        security:
-          - BearerAuth: []
-        responses:
-          "200":
-            description: List of bank links
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    bank_links:
-                      type: array
-                      items:
-                        $ref: "#/components/schemas/BankLinkWithDetails"
-          "401":
-            $ref: "#/components/responses/Unauthorized"
-          "500":
-            $ref: "#/components/responses/InternalServerError"
+  /api/v1/lounge-owner/bank-links:
+    post:
+      summary: Create a bank link (associate bank details to owner/lounge)
+      description: |
+        Create a link between a lounge owner and bank details.
 
-    /api/v1/lounge-owner/bank-links/{id}:
-      delete:
-        summary: Delete a bank link
-        operationId: deleteLoungeOwnerBankLink
-        tags:
-          - Lounge Owner
-        security:
-          - BearerAuth: []
-        parameters:
-          - name: id
-            in: path
-            required: true
+        **Important**: The `owner_id` is automatically resolved by the backend:
+        1. Backend extracts `user_id` from JWT token
+        2. Backend looks up `lounge_owners` table to find the `lounge_owner.id` matching the `user_id`
+        3. Backend uses that `lounge_owner.id` as the `owner_id` in the link
+
+        The frontend only needs to provide `bank_details_id` and optionally `lounge_id`.
+      operationId: createLoungeOwnerBankLink
+      tags:
+        - Lounge Owner
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
             schema:
-              type: string
-              format: uuid
-        responses:
-          "200":
-            description: Deleted successfully
-            content:
-              application/json:
-                schema:
-                  type: object
-                  properties:
-                    message:
-                      type: string
-                      example: "deleted"
-          "400":
-            $ref: "#/components/responses/BadRequest"
-          "401":
-            $ref: "#/components/responses/Unauthorized"
-          "404":
-            description: Bank link not found
-          "500":
-            $ref: "#/components/responses/InternalServerError"
+              $ref: "#/components/schemas/BankLinkRequest"
+      responses:
+        "201":
+          description: Bank link created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bank_link:
+                    $ref: "#/components/schemas/BankLinkResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    get:
+      summary: List bank links for current lounge owner
+      description: |
+        Retrieve all bank links for the authenticated lounge owner.
+
+        The API automatically filters links by the lounge owner resolved from the JWT token's `user_id`.
+        Each link includes the associated bank details with decrypted sensitive fields.
+      operationId: listLoungeOwnerBankLinks
+      tags:
+        - Lounge Owner
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of bank links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bank_links:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BankLinkWithDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/lounge-owner/bank-links/{id}:
+    delete:
+      summary: Delete a bank link
+      operationId: deleteLoungeOwnerBankLink
+      tags:
+        - Lounge Owner
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "deleted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Bank link not found
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /api/v1/lounge-owner/registration/progress:
     get:
@@ -13950,61 +13951,6 @@ components:
           format: uuid
           example: "550e8400-e29b-41d4-a716-446655440000"
 
-    AdminRefreshToken:
-      type: object
-      description: Refresh token for admin dashboard authentication (stored in admin_refresh_tokens table)
-      properties:
-        id:
-          type: string
-          format: uuid
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        admin_user_id:
-          type: string
-          format: uuid
-          description: Foreign key to admin_users table
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        token_hash:
-          type: string
-          description: SHA-256 hash of the refresh token
-          example: "a3f5c8e9b2d4f1a6c8e7b9d2f4a1c6e8b5d7f9a2c4e6b8d1f3a5c7e9b2d4f6a8"
-        device_id:
-          type: string
-          nullable: true
-          example: "device-12345"
-        device_type:
-          type: string
-          nullable: true
-          example: "web"
-        ip_address:
-          type: string
-          nullable: true
-          example: "192.168.1.100"
-        user_agent:
-          type: string
-          nullable: true
-          example: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        created_at:
-          type: string
-          format: date-time
-          example: "2025-11-12T00:00:00Z"
-        expires_at:
-          type: string
-          format: date-time
-          example: "2025-11-19T00:00:00Z"
-        last_used_at:
-          type: string
-          format: date-time
-          nullable: true
-          example: "2025-11-12T12:30:00Z"
-        revoked:
-          type: boolean
-          example: false
-        revoked_at:
-          type: string
-          format: date-time
-          nullable: true
-          example: null
-
     BusStaff:
       type: object
       description: |
@@ -14140,19 +14086,6 @@ components:
         updated_at:
           type: string
           format: date-time
-
-    StaffWithEmployment:
-      type: object
-      description: Staff profile combined with current employment information
-      properties:
-        staff:
-          $ref: "#/components/schemas/BusStaff"
-        employment:
-          $ref: "#/components/schemas/BusStaffEmployment"
-        phone:
-          type: string
-          description: Phone number from user profile
-          example: "+94712345678"
 
     BusOwner:
       type: object
@@ -14460,11 +14393,13 @@ components:
         staff:
           $ref: "#/components/schemas/BusStaff"
         employment:
-          $ref: "#/components/schemas/BusStaffEmployment"
+          allOf:
+            - $ref: "#/components/schemas/BusStaffEmployment"
           nullable: true
           description: Current employment record (null if not linked to any bus owner)
         bus_owner:
-          $ref: "#/components/schemas/BusOwner"
+          allOf:
+            - $ref: "#/components/schemas/BusOwner"
           nullable: true
           description: Current employer's bus owner profile (null if not employed)
 
