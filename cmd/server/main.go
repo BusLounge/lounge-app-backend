@@ -265,6 +265,14 @@ func main() {
 	loungeOwnerHandler := handlers.NewLoungeOwnerHandler(loungeOwnerRepository, userRepository, loungeRepository) //added lounge repository new
 	loungeRouteRepository := database.NewLoungeRouteRepository(sqlxDB.DB)
 	loungeHandler := handlers.NewLoungeHandler(loungeRepository, loungeOwnerRepository, loungeRouteRepository)
+	// Initialize lounge owner bank repositories and handler
+	loungeOwnerBankRepo := database.NewLoungeOwnerBankDetailsRepository(sqlxDB.DB)
+	loungeOwnerBankLinkRepo := database.NewLoungeOwnerBankLinkRepository(sqlxDB.DB)
+	loungeOwnerBankHandler := handlers.NewLoungeOwnerBankHandler(
+		loungeOwnerBankRepo,
+		loungeOwnerBankLinkRepo,
+		loungeOwnerRepository,
+	)
 
 	// Initialize lounge booking system first before staff handler
 	logger.Info("🏨 Initializing lounge booking system...")
@@ -641,6 +649,23 @@ func main() {
 				loungeOwner.GET("/profile", loungeOwnerHandler.GetProfile)
 				logger.Info("  ✅ PUT /api/v1/lounge-owner/profile/update")
 				loungeOwner.PUT("/profile/update", loungeOwnerHandler.UpdateProfile)
+
+					// Lounge owner bank details & links
+					logger.Info("  ✅ POST /api/v1/lounge-owner/bank-details")
+					loungeOwner.POST("/bank-details", loungeOwnerBankHandler.CreateBankDetails)
+					logger.Info("  ✅ GET /api/v1/lounge-owner/bank-details/:id")
+					loungeOwner.GET("/bank-details/:id", loungeOwnerBankHandler.GetBankDetails)
+					logger.Info("  ✅ PUT /api/v1/lounge-owner/bank-details/:id")
+					loungeOwner.PUT("/bank-details/:id", loungeOwnerBankHandler.UpdateBankDetails)
+					logger.Info("  ✅ DELETE /api/v1/lounge-owner/bank-details/:id")
+					loungeOwner.DELETE("/bank-details/:id", loungeOwnerBankHandler.DeleteBankDetails)
+
+					logger.Info("  ✅ POST /api/v1/lounge-owner/bank-links")
+					loungeOwner.POST("/bank-links", loungeOwnerBankHandler.CreateBankLink)
+					logger.Info("  ✅ GET /api/v1/lounge-owner/bank-links")
+					loungeOwner.GET("/bank-links", loungeOwnerBankHandler.ListBankLinks)
+					logger.Info("  ✅ DELETE /api/v1/lounge-owner/bank-links/:id")
+					loungeOwner.DELETE("/bank-links/:id", loungeOwnerBankHandler.DeleteBankLink)
 			}
 
 		}
