@@ -5064,10 +5064,6 @@ paths:
             description: Bank link not found
           "500":
             $ref: "#/components/responses/InternalServerError"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
 
   /api/v1/lounge-owner/registration/progress:
     get:
