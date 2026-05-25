@@ -124,6 +124,50 @@ func (d *DialogURLGateway) SendOTP(phone, otpCode, appType string) (int64, error
 	return 0, fmt.Errorf("SMS sending failed with error code: %s", responseStr)
 }
 
+// SendMessage sends a plain text message via Dialog URL API.
+func (d *DialogURLGateway) SendMessage(phone, message string) (int64, error) {
+	if strings.TrimSpace(message) == "" {
+		return 0, fmt.Errorf("message cannot be empty")
+	}
+
+	formattedPhone, err := FormatPhoneForDialog(phone)
+	if err != nil {
+		return 0, fmt.Errorf("invalid phone number: %v", err)
+	}
+
+	baseURL := "https://e-sms.dialog.lk/api/v1/message-via-url/create/url-campaign"
+	params := url.Values{}
+	params.Add("esmsqk", d.apiKey)
+	params.Add("list", formattedPhone)
+	params.Add("source_address", d.mask)
+	params.Add("message", message)
+
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(fullURL)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send SMS: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read SMS response: %v", err)
+	}
+
+	responseStr := strings.TrimSpace(string(body))
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("SMS API returned status %d: %s", resp.StatusCode, responseStr)
+	}
+
+	if responseStr == "1" {
+		return time.Now().Unix(), nil
+	}
+
+	return 0, fmt.Errorf("SMS sending failed with error code: %s", responseStr)
+}
+
 // SendOTPWithHash sends an OTP - kept for backward compatibility but now just calls SendOTP
 // Note: This method is deprecated and should be removed in future versions
 func (d *DialogURLGateway) SendOTPWithHash(phone, otpCode, appHash string) (int64, error) {

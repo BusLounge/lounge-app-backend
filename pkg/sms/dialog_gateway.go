@@ -345,6 +345,71 @@ func (d *DialogGateway) SendOTP(phone, otpCode, appType string) (int64, error) {
 	return transactionID, nil
 }
 
+// SendMessage sends a plain text message to a single recipient.
+func (d *DialogGateway) SendMessage(phone, message string) (int64, error) {
+	if strings.TrimSpace(message) == "" {
+		return 0, fmt.Errorf("message cannot be empty")
+	}
+
+	if err := d.ensureValidToken(); err != nil {
+		return 0, fmt.Errorf("failed to get access token: %w", err)
+	}
+
+	formattedPhone, err := FormatPhoneForDialog(phone)
+	if err != nil {
+		return 0, fmt.Errorf("failed to format phone number: %w", err)
+	}
+
+	transactionID := time.Now().UnixMicro()
+	smsReq := SendSMSRequest{
+		MSISDN: []SMSRecipient{
+			{Mobile: formattedPhone},
+		},
+		Message:       message,
+		SourceAddress: d.mask,
+		TransactionID: transactionID,
+		PaymentMethod: 0,
+	}
+
+	jsonData, err := json.Marshal(smsReq)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal SMS request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/sms", d.apiURL)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return 0, fmt.Errorf("failed to create SMS request: %w", err)
+	}
+
+	d.tokenMutex.RLock()
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", d.token))
+	d.tokenMutex.RUnlock()
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send SMS request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read SMS response: %w", err)
+	}
+
+	var smsResp SendSMSResponse
+	if err := json.Unmarshal(body, &smsResp); err != nil {
+		return 0, fmt.Errorf("failed to parse SMS response: %w", err)
+	}
+
+	if smsResp.Status != "success" {
+		return 0, fmt.Errorf("SMS sending failed: %s (error code: %s)", smsResp.Comment, smsResp.ErrCode)
+	}
+
+	return transactionID, nil
+}
+
 // CheckCampaignStatus checks the status of an SMS campaign
 func (d *DialogGateway) CheckCampaignStatus(transactionID int64) (string, error) {
 	// Ensure we have a valid token

@@ -4,12 +4,14 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/smarttransit/sms-auth-backend/internal/database"
 	"github.com/smarttransit/sms-auth-backend/internal/middleware"
 	"github.com/smarttransit/sms-auth-backend/internal/models"
+	"github.com/smarttransit/sms-auth-backend/pkg/sms"
 )
 
 // LoungeBookingDriverAssignmentHandler handles driver assignment operations
@@ -17,6 +19,7 @@ type LoungeBookingDriverAssignmentHandler struct {
 	assignmentRepo  *database.LoungeBookingDriverAssignmentRepository
 	loungeOwnerRepo *database.LoungeOwnerRepository
 	loungeRepo      *database.LoungeRepository
+	smsGateway      sms.SMSGateway
 }
 
 // NewLoungeBookingDriverAssignmentHandler creates a new handler
@@ -24,11 +27,13 @@ func NewLoungeBookingDriverAssignmentHandler(
 	assignmentRepo *database.LoungeBookingDriverAssignmentRepository,
 	loungeOwnerRepo *database.LoungeOwnerRepository,
 	loungeRepo *database.LoungeRepository,
+	smsGateway sms.SMSGateway,
 ) *LoungeBookingDriverAssignmentHandler {
 	return &LoungeBookingDriverAssignmentHandler{
 		assignmentRepo:  assignmentRepo,
 		loungeOwnerRepo: loungeOwnerRepo,
 		loungeRepo:      loungeRepo,
+		smsGateway:      smsGateway,
 	}
 }
 
@@ -99,10 +104,48 @@ func (h *LoungeBookingDriverAssignmentHandler) CreateAssignment(c *gin.Context) 
 		return
 	}
 
+	h.sendDriverAssignmentSMS(req.DriverContact, req.GuestName, req.GuestContact)
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message":     "Driver assignment created successfully",
 		"assignment":  assignment,
 	})
+}
+
+func (h *LoungeBookingDriverAssignmentHandler) sendDriverAssignmentSMS(driverContact, guestName, guestContact string) {
+	if h.smsGateway == nil {
+		return
+	}
+
+	phone := strings.TrimSpace(driverContact)
+	if phone == "" {
+		return
+	}
+
+	name := strings.TrimSpace(guestName)
+	if name == "" {
+		name = "Guest"
+	}
+
+	contact := strings.TrimSpace(guestContact)
+	if contact == "" {
+		message := "Your vehicle is booked for: " + name + "."
+		if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
+			log.Printf("WARN: Failed to send assignment SMS to %s: %v", phone, err)
+			return
+		}
+
+		log.Printf("INFO: Assignment SMS sent to driver %s", phone)
+		return
+	}
+
+	message := "Your vehicle is booked for: " + name + ". Contact the passenger at " + contact + " and get directions."
+	if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
+		log.Printf("WARN: Failed to send assignment SMS to %s: %v", phone, err)
+		return
+	}
+
+	log.Printf("INFO: Assignment SMS sent to driver %s", phone)
 }
 
 // GetAssignmentByID handles GET /api/v1/lounge-booking-driver-assignments/:id

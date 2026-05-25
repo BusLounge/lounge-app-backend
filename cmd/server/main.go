@@ -292,7 +292,12 @@ func main() {
 	// Initialize Lounge Booking Driver Assignment system
 	logger.Info("Initializing lounge booking driver assignment system...")
 	loungeBookingDriverAssignmentRepo := database.NewLoungeBookingDriverAssignmentRepository(sqlxDB.DB)
-	loungeBookingDriverAssignmentHandler := handlers.NewLoungeBookingDriverAssignmentHandler(loungeBookingDriverAssignmentRepo, loungeOwnerRepository, loungeRepository)
+	loungeBookingDriverAssignmentHandler := handlers.NewLoungeBookingDriverAssignmentHandler(
+		loungeBookingDriverAssignmentRepo,
+		loungeOwnerRepository,
+		loungeRepository,
+		smsGateway,
+	)
 	logger.Info("✓ Lounge booking driver assignment system initialized")
 
 	logger.Info("🔍 DEBUG: Lounge handlers initialized successfully")
