@@ -137,6 +137,8 @@ tags:
     description: Lounge product (food/beverages) management
   - name: Lounge Orders
     description: Lounge order management for food/beverages
+  - name: Lounge Driver Assignments
+    description: Driver assignment operations for lounge bookings, including driver SMS notification on assignment creation
   - name: Active Trips
     description: Active trip passenger management and operations for conductors/drivers
 
@@ -9517,6 +9519,11 @@ paths:
       description: |
         Assign a driver to a lounge booking for guest transportation.
         Requires lounge owner authentication.
+
+        **SMS Notification:**
+        - After successful assignment creation, the backend sends an SMS to the assigned driver via the configured SMS gateway.
+        - Message includes passenger name and booking contact number, and asks the driver to contact the passenger to get directions.
+        - SMS dispatch is best-effort; assignment creation remains successful even if SMS delivery fails.
       operationId: createLoungeBookingDriverAssignment
       tags:
         - Lounge Driver Assignments
