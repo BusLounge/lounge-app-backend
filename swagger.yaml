@@ -6162,6 +6162,12 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Driver already assigned for this booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -9719,6 +9725,47 @@ paths:
           $ref: "#/components/responses/InternalServerError"
 
   /api/v1/lounge-bookings/{id}/driver-assignments:
+      /api/v1/lounge-booking-driver-assignments/check/{booking_id}:
+        get:
+          summary: Check if driver is assigned to booking
+          description: |
+            Check whether a driver is already assigned to a specific lounge booking.
+            Returns the assignment details if a driver is assigned, otherwise returns null.
+            This is a public endpoint and does not require authentication.
+          operationId: checkDriverAssignmentForBooking
+          tags:
+            - Lounge Driver Assignments
+          parameters:
+            - name: booking_id
+              in: path
+              required: true
+              schema:
+                type: string
+                format: uuid
+                description: The lounge booking ID to check for driver assignment
+          responses:
+            "200":
+              description: Check completed successfully
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      assigned:
+                        type: boolean
+                        description: Whether a driver is already assigned to this booking
+                        example: true
+                      assignment:
+                        oneOf:
+                          - $ref: "#/components/schemas/LoungeBookingDriverAssignment"
+                          - type: "null"
+                        description: The assignment details if assigned, null if not assigned
+            "400":
+              $ref: "#/components/responses/BadRequest"
+            "500":
+              $ref: "#/components/responses/InternalServerError"
+
+      /api/v1/lounge-bookings/{id}/driver-assignments:
     get:
       summary: Get driver assignments for booking
       description: Retrieve all driver assignments for a specific booking.

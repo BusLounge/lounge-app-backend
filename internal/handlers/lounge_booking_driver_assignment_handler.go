@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -80,6 +82,25 @@ func (h *LoungeBookingDriverAssignmentHandler) CreateAssignment(c *gin.Context) 
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Error:   "forbidden",
 			Message: "You don't own this lounge",
+		})
+		return
+	}
+
+	// Enforce one active driver assignment per booking
+	existingAssignment, err := h.assignmentRepo.CheckIfDriverAssigned(req.LoungeBookingID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("ERROR: Failed to check existing assignment: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to check existing assignment",
+		})
+		return
+	}
+
+	if existingAssignment != nil {
+		c.JSON(http.StatusConflict, ErrorResponse{
+			Error:   "already_assigned",
+			Message: "A driver is already assigned to this booking",
 		})
 		return
 	}
@@ -514,5 +535,42 @@ func (h *LoungeBookingDriverAssignmentHandler) CancelAssignment(c *gin.Context) 
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "Assignment cancelled successfully",
 		"assignment_id": assignmentID,
+	})
+}
+
+// CheckDriverAssignment handles GET /api/v1/lounge-booking-driver-assignments/check/:booking_id
+// Checks if a driver is already assigned to a specific booking
+func (h *LoungeBookingDriverAssignmentHandler) CheckDriverAssignment(c *gin.Context) {
+	bookingIDStr := c.Param("booking_id")
+	bookingID, err := uuid.Parse(bookingIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_id",
+			Message: "Invalid booking ID format",
+		})
+		return
+	}
+
+	assignment, err := h.assignmentRepo.CheckIfDriverAssigned(bookingID)
+	if err != nil {
+		// No assignment found or other error - treat as not assigned
+		c.JSON(http.StatusOK, gin.H{
+			"assigned":   false,
+			"assignment": nil,
+		})
+		return
+	}
+
+	if assignment == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"assigned":   false,
+			"assignment": nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"assigned":   true,
+		"assignment": assignment,
 	})
 }

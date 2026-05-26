@@ -168,3 +168,20 @@ func (r *LoungeBookingDriverAssignmentRepository) CancelAssignment(assignmentID 
 	_, err := r.db.Exec(query, assignmentID)
 	return err
 }
+
+// CheckIfDriverAssigned checks if a driver is already assigned to a booking
+// Returns the driver assignment if one exists (in non-terminal status), nil otherwise
+func (r *LoungeBookingDriverAssignmentRepository) CheckIfDriverAssigned(bookingID uuid.UUID) (*models.LoungeBookingDriverAssignment, error) {
+	var assignment models.LoungeBookingDriverAssignment
+	checkQuery := `
+		SELECT id, lounge_id, driver_id, lounge_booking_id, guest_name, guest_contact, driver_contact, status, created_at, updated_at
+		FROM lounge_booking_driver_assignments
+		WHERE lounge_booking_id = $1 AND status NOT IN ('cancelled', 'completed')
+		LIMIT 1
+	`
+	err := r.db.Get(&assignment, checkQuery, bookingID)
+	if err != nil {
+		return nil, err
+	}
+	return &assignment, nil
+}
