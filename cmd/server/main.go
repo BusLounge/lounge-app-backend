@@ -289,6 +289,12 @@ func main() {
 	loungeBookingHandler := handlers.NewLoungeBookingHandler(loungeBookingRepo, loungeRepository, loungeOwnerRepository, loungeStaffRepository)
 	logger.Info("✓ Lounge booking handler initialized")
 
+	cloudinaryStorageService, cloudinaryErr := services.NewCloudinaryStorageService(cfg.CloudinaryURL, cfg.Server.Environment)
+	if cloudinaryErr != nil {
+		logger.Warnf("Cloudinary storage is not configured: %v", cloudinaryErr)
+	}
+	storageHandler := handlers.NewStorageHandler(cloudinaryStorageService, loungeOwnerRepository, loungeRepository)
+
 	// Initialize Lounge Booking Driver Assignment system
 	logger.Info("Initializing lounge booking driver assignment system...")
 	loungeBookingDriverAssignmentRepo := database.NewLoungeBookingDriverAssignmentRepository(sqlxDB.DB)
@@ -667,26 +673,42 @@ func main() {
 				logger.Info("  ✅ PUT /api/v1/lounge-owner/profile/update")
 				loungeOwner.PUT("/profile/update", loungeOwnerHandler.UpdateProfile)
 
-					// Lounge owner bank details & links
-					logger.Info("  ✅ POST /api/v1/lounge-owner/bank-details")
-					loungeOwner.POST("/bank-details", loungeOwnerBankHandler.CreateBankDetails)
-					logger.Info("  ✅ GET /api/v1/lounge-owner/bank-details/:id")
-					loungeOwner.GET("/bank-details/:id", loungeOwnerBankHandler.GetBankDetails)
-					logger.Info("  ✅ PUT /api/v1/lounge-owner/bank-details/:id")
-					loungeOwner.PUT("/bank-details/:id", loungeOwnerBankHandler.UpdateBankDetails)
-					logger.Info("  ✅ DELETE /api/v1/lounge-owner/bank-details/:id")
-					loungeOwner.DELETE("/bank-details/:id", loungeOwnerBankHandler.DeleteBankDetails)
+				// Lounge owner bank details & links
+				logger.Info("  ✅ POST /api/v1/lounge-owner/bank-details")
+				loungeOwner.POST("/bank-details", loungeOwnerBankHandler.CreateBankDetails)
+				logger.Info("  ✅ GET /api/v1/lounge-owner/bank-details/:id")
+				loungeOwner.GET("/bank-details/:id", loungeOwnerBankHandler.GetBankDetails)
+				logger.Info("  ✅ PUT /api/v1/lounge-owner/bank-details/:id")
+				loungeOwner.PUT("/bank-details/:id", loungeOwnerBankHandler.UpdateBankDetails)
+				logger.Info("  ✅ DELETE /api/v1/lounge-owner/bank-details/:id")
+				loungeOwner.DELETE("/bank-details/:id", loungeOwnerBankHandler.DeleteBankDetails)
 
-					logger.Info("  ✅ POST /api/v1/lounge-owner/bank-links")
-					loungeOwner.POST("/bank-links", loungeOwnerBankHandler.CreateBankLink)
-					logger.Info("  ✅ GET /api/v1/lounge-owner/bank-links")
-					loungeOwner.GET("/bank-links", loungeOwnerBankHandler.ListBankLinks)
-					logger.Info("  ✅ DELETE /api/v1/lounge-owner/bank-links/:id")
-					loungeOwner.DELETE("/bank-links/:id", loungeOwnerBankHandler.DeleteBankLink)
+				logger.Info("  ✅ POST /api/v1/lounge-owner/bank-links")
+				loungeOwner.POST("/bank-links", loungeOwnerBankHandler.CreateBankLink)
+				logger.Info("  ✅ GET /api/v1/lounge-owner/bank-links")
+				loungeOwner.GET("/bank-links", loungeOwnerBankHandler.ListBankLinks)
+				logger.Info("  ✅ DELETE /api/v1/lounge-owner/bank-links/:id")
+				loungeOwner.DELETE("/bank-links/:id", loungeOwnerBankHandler.DeleteBankLink)
 			}
 
 		}
 		logger.Info("🏢 Lounge Owner routes registered successfully")
+
+		// Image upload routes (Cloudinary-backed)
+		logger.Info("📸 Registering image upload routes...")
+		uploads := v1.Group("/uploads")
+		uploads.Use(middleware.AuthMiddleware(jwtService))
+		{
+			logger.Info("  ✅ POST /api/v1/uploads/lounge-photos/:lounge_id")
+			uploads.POST("/lounge-photos/:lounge_id", storageHandler.UploadLoungePhoto)
+			logger.Info("  ✅ POST /api/v1/uploads/lounge-products/:lounge_id/image")
+			uploads.POST("/lounge-products/:lounge_id/image", storageHandler.UploadProductImage)
+			logger.Info("  ✅ POST /api/v1/uploads/lounge-owner/:user_id/nic/:side")
+			uploads.POST("/lounge-owner/:user_id/nic/:side", storageHandler.UploadManagerNICImage)
+			logger.Info("  ✅ POST /api/v1/uploads/image/delete")
+			uploads.POST("/image/delete", storageHandler.DeleteImage)
+		}
+		logger.Info("📸 Image upload routes registered successfully")
 
 		// Lounge Staff routes (protected)
 		logger.Info("🏨 Registering Lounge Staff routes...")

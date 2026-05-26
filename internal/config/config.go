@@ -39,13 +39,16 @@ type Config struct {
 	// Payment gateway configuration
 	Payment PaymentConfig
 
+	// Cloudinary configuration
+	CloudinaryURL string
+
 	// OneSignal Configuration
 
 	// OneSignal App ID
-	OneSignalAppID      string 
+	OneSignalAppID string
 
 	// OneSignal REST API Key
-	OneSignalRestAPIKey string 
+	OneSignalRestAPIKey string
 }
 
 // PaymentConfig holds PAYable IPG configuration
@@ -193,6 +196,7 @@ func Load() (*Config, error) {
 			ReturnURL:     getEnv("PAYABLE_RETURN_URL", ""),
 			WebhookURL:    getEnv("PAYABLE_WEBHOOK_URL", ""),
 		},
+		CloudinaryURL:       getEnv("CLOUDINARY_URL", ""),
 		OneSignalAppID:      getEnv("ONESIGNAL_APP_ID", ""),
 		OneSignalRestAPIKey: getEnv("ONESIGNAL_REST_API_KEY", ""),
 	}
