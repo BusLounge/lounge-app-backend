@@ -103,6 +103,8 @@ tags:
     description: Bus owner profile and onboarding management
   - name: Lounge Owner
     description: Lounge owner registration and management
+  - name: Uploads
+    description: Cloudinary-backed image upload and deletion endpoints
   - name: Districts
     description: District lookup endpoints
   - name: Lounge Staff
@@ -4714,6 +4716,18 @@ paths:
                   format: uuid
                   example: "550e8400-e29b-41d4-a716-446655440000"
                   description: District UUID from districts table (required for geographic filtering and grouping)
+                manager_nic_front_url:
+                  type: string
+                  format: uri
+                  nullable: true
+                  example: "https://res.cloudinary.com/demo/image/upload/v12345/smarttransit/dev/lounge-owner-nic/uuid/front/123.png"
+                  description: Optional NIC front image URL returned by the Cloudinary upload endpoint
+                manager_nic_back_url:
+                  type: string
+                  format: uri
+                  nullable: true
+                  example: "https://res.cloudinary.com/demo/image/upload/v12345/smarttransit/dev/lounge-owner-nic/uuid/back/456.png"
+                  description: Optional NIC back image URL returned by the Cloudinary upload endpoint
       responses:
         "200":
           description: Business and manager information saved successfully
@@ -4754,7 +4768,7 @@ paths:
       deprecated: true
       description: |
         **DEPRECATED**: This endpoint is no longer used in the registration flow.
-        NIC verification is now handled manually by admins after registration completion.
+        NIC images are now uploaded through `/api/v1/uploads/lounge-owner/{user_id}/nic/{side}` and then referenced in the registration payload.
         This endpoint returns HTTP 410 Gone if called.
       operationId: uploadManagerNIC
       tags:
@@ -4774,7 +4788,194 @@ paths:
                     example: "deprecated_endpoint"
                   message:
                     type: string
-                    example: "This endpoint is deprecated. Please include NIC images in the business-info step."
+                    example: "This endpoint is deprecated. Please upload NIC images via /api/v1/uploads/lounge-owner/{user_id}/nic/{side} and include the returned URLs in business-info."
+
+  /api/v1/uploads/lounge-photos/{lounge_id}:
+    post:
+      summary: Upload a lounge photo
+      description: |
+        Upload a lounge image to Cloudinary and return the public secure URL.
+        The returned URL should be stored in the lounge `images` array.
+      operationId: uploadLoungePhoto
+      tags:
+        - Uploads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lounge_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Lounge ID used to group uploaded assets in Cloudinary
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Image file to upload
+      responses:
+        "200":
+          description: Lounge photo uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudinaryUploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/uploads/lounge-products/{lounge_id}/image:
+    post:
+      summary: Upload a lounge product image
+      description: |
+        Upload a product image to Cloudinary and return the public secure URL.
+        The returned URL should be stored in `image_url` or `thumbnail_url`.
+      operationId: uploadLoungeProductImage
+      tags:
+        - Uploads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: lounge_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Lounge ID used to group uploaded assets in Cloudinary
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Product image file to upload
+      responses:
+        "200":
+          description: Product image uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudinaryUploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/uploads/lounge-owner/{user_id}/nic/{side}:
+    post:
+      summary: Upload a lounge owner NIC image
+      description: |
+        Upload the front or back NIC image to Cloudinary and return the public secure URL.
+        Use `side=front` or `side=back`.
+      operationId: uploadLoungeOwnerNicImage
+      tags:
+        - Uploads
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: side
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [front, back]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: NIC image file to upload
+      responses:
+        "200":
+          description: NIC image uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloudinaryUploadResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/uploads/image/delete:
+    post:
+      summary: Delete an uploaded image
+      description: Delete a Cloudinary image by its URL.
+      operationId: deleteUploadedImage
+      tags:
+        - Uploads
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://res.cloudinary.com/demo/image/upload/v12345/smarttransit/dev/lounge-photos/abc/gallery/123.png"
+      responses:
+        "200":
+          description: Image deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   /api/v1/lounge-owner/register/add-lounge:
     post:
@@ -9724,48 +9925,46 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /api/v1/lounge-bookings/{id}/driver-assignments:
-      /api/v1/lounge-booking-driver-assignments/check/{booking_id}:
-        get:
-          summary: Check if driver is assigned to booking
-          description: |
-            Check whether a driver is already assigned to a specific lounge booking.
-            Returns the assignment details if a driver is assigned, otherwise returns null.
-            This is a public endpoint and does not require authentication.
-          operationId: checkDriverAssignmentForBooking
-          tags:
-            - Lounge Driver Assignments
-          parameters:
-            - name: booking_id
-              in: path
-              required: true
+  /api/v1/lounge-booking-driver-assignments/check/{booking_id}:
+    get:
+      summary: Check if driver is assigned to booking
+      description: |
+        Check whether a driver is already assigned to a specific lounge booking.
+        Returns the assignment details if a driver is assigned, otherwise returns null.
+        This is a public endpoint and does not require authentication.
+      operationId: checkDriverAssignmentForBooking
+      tags:
+        - Lounge Driver Assignments
+      parameters:
+        - name: booking_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            description: The lounge booking ID to check for driver assignment
+      responses:
+        "200":
+          description: Check completed successfully
+          content:
+            application/json:
               schema:
-                type: string
-                format: uuid
-                description: The lounge booking ID to check for driver assignment
-          responses:
-            "200":
-              description: Check completed successfully
-              content:
-                application/json:
-                  schema:
-                    type: object
-                    properties:
-                      assigned:
-                        type: boolean
-                        description: Whether a driver is already assigned to this booking
-                        example: true
-                      assignment:
-                        oneOf:
-                          - $ref: "#/components/schemas/LoungeBookingDriverAssignment"
-                          - type: "null"
-                        description: The assignment details if assigned, null if not assigned
-            "400":
-              $ref: "#/components/responses/BadRequest"
-            "500":
-              $ref: "#/components/responses/InternalServerError"
+                type: object
+                properties:
+                  assigned:
+                    type: boolean
+                    description: Whether a driver is already assigned to this booking
+                    example: true
+                  assignment:
+                    $ref: "#/components/schemas/LoungeBookingDriverAssignment"
+                    nullable: true
+                    description: The assignment details if assigned, null if not assigned
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
-      /api/v1/lounge-bookings/{id}/driver-assignments:
+  /api/v1/lounge-bookings/{id}/driver-assignments:
     get:
       summary: Get driver assignments for booking
       description: Retrieve all driver assignments for a specific booking.
@@ -16693,6 +16892,40 @@ components:
           type: array
           items:
             type: string
+
+    CloudinaryUploadResponse:
+      type: object
+      description: Response returned after uploading an image to Cloudinary
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Public secure URL for the uploaded image
+        public_id:
+          type: string
+          description: Cloudinary public ID for the asset
+        asset_id:
+          type: string
+          description: Cloudinary asset ID for the uploaded file
+        entity:
+          type: string
+          description: Logical asset group returned by the API
+        lounge_id:
+          type: string
+          nullable: true
+          description: Lounge ID when uploading lounge or product images
+        user_id:
+          type: string
+          nullable: true
+          description: User ID when uploading NIC images
+        side:
+          type: string
+          nullable: true
+          description: NIC side when uploading owner ID images
+        filename:
+          type: string
+          nullable: true
+          description: Original uploaded filename
 
     LoungeBooking:
       type: object
