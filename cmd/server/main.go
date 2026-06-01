@@ -911,6 +911,8 @@ func main() {
 		// Assignments by booking
 		logger.Info("  ✅ GET /api/v1/lounge-bookings/:id/driver-assignments - Get assignments for booking")
 		v1.GET("/lounge-bookings/:id/driver-assignments", loungeBookingDriverAssignmentHandler.GetAssignmentsByBooking)
+		logger.Info("  ✅ GET /api/v1/lounge-bookings/:id/assigned-driver - Get active assigned driver for booking")
+		v1.GET("/lounge-bookings/:id/assigned-driver", loungeBookingDriverAssignmentHandler.GetAssignedDriverByBooking)
 
 		// Assignments by driver
 		logger.Info("  ✅ GET /api/v1/drivers/:driver_id/assignments - Get assignments for driver")

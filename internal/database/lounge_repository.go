@@ -156,7 +156,7 @@ func (r *LoungeRepository) GetLoungesByOwnerAndDistrict(ownerID uuid.UUID, distr
 	return lounges, nil
 }
 
-// GetAllActiveLounges retrieves all active lounges (for public listing)
+// GetAllActiveLounges retrieves all active lounges (for public listing) - DEPRECATED: use GetActiveLoungesPaginated
 func (r *LoungeRepository) GetAllActiveLounges() ([]models.Lounge, error) {
 	var lounges []models.Lounge
 	query := `
@@ -168,12 +168,50 @@ func (r *LoungeRepository) GetAllActiveLounges() ([]models.Lounge, error) {
 		FROM lounges 
 		WHERE status = 'approved' AND is_operational = true
 		ORDER BY lounge_name
+		LIMIT 50
 	`
 	err := r.db.Select(&lounges, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active lounges: %w", err)
 	}
 	return lounges, nil
+}
+
+// GetActiveLoungesPaginated retrieves active lounges with pagination
+func (r *LoungeRepository) GetActiveLoungesPaginated(limit int, offset int) ([]models.Lounge, int64, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20 // Default limit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var lounges []models.Lounge
+	query := `
+		SELECT id, lounge_owner_id, lounge_name, description, address, district, state, country, 
+		       postal_code, latitude, longitude, contact_phone, capacity, 
+		       price_1_hour, price_2_hours, price_3_hours, price_until_bus, 
+		       amenities, images, status, is_operational, average_rating, 
+		       created_at, updated_at
+		FROM lounges 
+		WHERE status = 'approved' AND is_operational = true
+		ORDER BY lounge_name
+		LIMIT $1 OFFSET $2
+	`
+	err := r.db.Select(&lounges, query, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get active lounges: %w", err)
+	}
+
+	// Get total count
+	var total int64
+	countQuery := `SELECT COUNT(*) FROM lounges WHERE status = 'approved' AND is_operational = true`
+	err = r.db.Get(&total, countQuery)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count lounges: %w", err)
+	}
+
+	return lounges, total, nil
 }
 
 // GetAllLounges retrieves all lounges regardless of status or operational flag
@@ -303,12 +341,59 @@ func (r *LoungeRepository) GetLoungesByStopID(stopID uuid.UUID) ([]models.Lounge
 		  AND l.is_operational = true
 		  AND (lr.stop_before_id = $1 OR lr.stop_after_id = $1)
 		ORDER BY l.lounge_name
+		LIMIT 50
 	`
 	err := r.db.Select(&lounges, query, stopID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get lounges by stop: %w", err)
 	}
 	return lounges, nil
+}
+
+// GetLoungesByStopIDPaginated retrieves active lounges that serve a specific stop with pagination
+func (r *LoungeRepository) GetLoungesByStopIDPaginated(stopID uuid.UUID, limit int, offset int) ([]models.Lounge, int64, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var lounges []models.Lounge
+	query := `
+		SELECT DISTINCT l.id, l.lounge_owner_id, l.lounge_name, l.description, l.address, l.district, l.state, l.country, 
+		       l.postal_code, l.latitude, l.longitude, l.contact_phone, l.capacity, 
+		       l.price_1_hour, l.price_2_hours, l.price_3_hours, l.price_until_bus, 
+		       l.amenities, l.images, l.status, l.is_operational, l.average_rating, 
+		       l.created_at, l.updated_at
+		FROM lounges l
+		INNER JOIN lounge_routes lr ON l.id = lr.lounge_id
+		WHERE l.status = 'approved' 
+		  AND l.is_operational = true
+		  AND (lr.stop_before_id = $1 OR lr.stop_after_id = $1)
+		ORDER BY l.lounge_name
+		LIMIT $2 OFFSET $3
+	`
+	err := r.db.Select(&lounges, query, stopID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get lounges by stop: %w", err)
+	}
+
+	// Get total count
+	var total int64
+	countQuery := `
+		SELECT COUNT(DISTINCT l.id) FROM lounges l
+		INNER JOIN lounge_routes lr ON l.id = lr.lounge_id
+		WHERE l.status = 'approved' 
+		  AND l.is_operational = true
+		  AND (lr.stop_before_id = $1 OR lr.stop_after_id = $1)
+	`
+	err = r.db.Get(&total, countQuery, stopID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count lounges by stop: %w", err)
+	}
+
+	return lounges, total, nil
 }
 
 // GetLoungesByRouteID retrieves all active lounges that serve a specific route
@@ -326,12 +411,59 @@ func (r *LoungeRepository) GetLoungesByRouteID(routeID uuid.UUID) ([]models.Loun
 		  AND l.is_operational = true
 		  AND lr.master_route_id = $1
 		ORDER BY l.lounge_name
+		LIMIT 50
 	`
 	err := r.db.Select(&lounges, query, routeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get lounges by route: %w", err)
 	}
 	return lounges, nil
+}
+
+// GetLoungesByRouteIDPaginated retrieves active lounges that serve a specific route with pagination
+func (r *LoungeRepository) GetLoungesByRouteIDPaginated(routeID uuid.UUID, limit int, offset int) ([]models.Lounge, int64, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var lounges []models.Lounge
+	query := `
+		SELECT DISTINCT l.id, l.lounge_owner_id, l.lounge_name, l.description, l.address, l.district, l.state, l.country, 
+		       l.postal_code, l.latitude, l.longitude, l.contact_phone, l.capacity, 
+		       l.price_1_hour, l.price_2_hours, l.price_3_hours, l.price_until_bus, 
+		       l.amenities, l.images, l.status, l.is_operational, l.average_rating, 
+		       l.created_at, l.updated_at
+		FROM lounges l
+		INNER JOIN lounge_routes lr ON l.id = lr.lounge_id
+		WHERE l.status = 'approved' 
+		  AND l.is_operational = true
+		  AND lr.master_route_id = $1
+		ORDER BY l.lounge_name
+		LIMIT $2 OFFSET $3
+	`
+	err := r.db.Select(&lounges, query, routeID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get lounges by route: %w", err)
+	}
+
+	// Get total count
+	var total int64
+	countQuery := `
+		SELECT COUNT(DISTINCT l.id) FROM lounges l
+		INNER JOIN lounge_routes lr ON l.id = lr.lounge_id
+		WHERE l.status = 'approved' 
+		  AND l.is_operational = true
+		  AND lr.master_route_id = $1
+	`
+	err = r.db.Get(&total, countQuery, routeID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count lounges by route: %w", err)
+	}
+
+	return lounges, total, nil
 }
 
 // GetLoungesNearStop retrieves lounges where passenger's stop is within N stops of the lounge's location

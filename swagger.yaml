@@ -260,6 +260,41 @@ paths:
                     format: int64
                     example: 1729340000
 
+  /api/v1/debug/routes:
+    get:
+      summary: List registered routes
+      description: |
+        Returns a list of registered routes (method and path). Useful for debugging and verifying registered endpoints.
+      operationId: debugRoutes
+      tags:
+        - Health
+      security: []
+      responses:
+        "200":
+          description: Registered routes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Registered routes
+                  total_routes:
+                    type: integer
+                    example: 42
+                  routes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        method:
+                          type: string
+                          example: GET
+                        path:
+                          type: string
+                          example: /api/v1/lounges/active
+
   # ============================================================================
   # Authentication Endpoints
   # ============================================================================
@@ -6368,7 +6403,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ErrorResponse"
+                $ref: "#/components/schemas/Error"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -9956,7 +9991,8 @@ paths:
                     description: Whether a driver is already assigned to this booking
                     example: true
                   assignment:
-                    $ref: "#/components/schemas/LoungeBookingDriverAssignment"
+                    allOf:
+                      - $ref: "#/components/schemas/LoungeBookingDriverAssignment"
                     nullable: true
                     description: The assignment details if assigned, null if not assigned
         "400":

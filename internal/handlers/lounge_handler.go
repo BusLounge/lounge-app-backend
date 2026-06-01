@@ -328,6 +328,10 @@ func (h *LoungeHandler) GetMyLounges(c *gin.Context) {
 		})
 	}
 
+	// Set cache headers for owner's lounges
+	c.Header("Cache-Control", "private, max-age=3600") // 1 hour cache for authenticated users
+	c.Header("Vary", "Accept-Encoding")
+
 	c.JSON(http.StatusOK, gin.H{
 		"lounges": response,
 		"total":   len(response),
@@ -385,6 +389,10 @@ func (h *LoungeHandler) GetLoungeByID(c *gin.Context) {
 		log.Printf("WARNING: Failed to get routes for lounge %s: %v", lounge.ID, err)
 		loungeRoutes = []models.LoungeRoute{} // Empty array on error
 	}
+
+	// Set cache headers - lounge data is relatively static
+	c.Header("Cache-Control", "public, max-age=3600") // 1 hour cache
+	c.Header("Vary", "Accept-Encoding")
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":              lounge.ID,
@@ -746,34 +754,39 @@ func (h *LoungeHandler) DeleteLounge(c *gin.Context) {
 // ===================================================================
 
 // GetAllActiveLounges handles GET /api/v1/lounges/active
-// Query params: state (string), limit (int)
-// @Summary Get all active lounges
-// @Description Retrieves all active lounges with optional state filter and limit
+// Query params: state (string), limit (int), offset (int), image_quality (sd|hd|full)
+// @Summary Get all active lounges with pagination
+// @Description Retrieves active lounges with pagination support and optional image quality
 // @Tags Lounges
 // @Produce json
+// @Param limit query int false "Items per page (default 20, max 100)"
+// @Param offset query int false "Pagination offset (default 0)"
 // @Param state query string false "Filter by state/province"
-// @Param limit query int false "Maximum number of lounges to return (random order)"
+// @Param image_quality query string false "Image quality: sd (480px), hd (720px), full (original)"
 // @Success 200 {object} map[string]interface{}
 // @Router /lounges/active [get]
 func (h *LoungeHandler) GetAllActiveLounges(c *gin.Context) {
-	// Parse query params
-	state := c.Query("state")
-	var limit int
+	// Parse pagination params
+	limit := 20
+	offset := 0
+	imageQuality := "sd" // Default to SD quality for faster loading
+
 	if limitStr := c.Query("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
 			limit = l
 		}
 	}
-
-	// Use search method if params provided, otherwise get all
-	var lounges []models.Lounge
-	var err error
-	if state != "" || limit > 0 {
-		lounges, err = h.loungeRepo.SearchActiveLounges(state, limit)
-	} else {
-		lounges, err = h.loungeRepo.GetAllActiveLounges()
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+	if quality := c.Query("image_quality"); quality != "" && (quality == "sd" || quality == "hd" || quality == "full") {
+		imageQuality = quality
 	}
 
+	// Get paginated lounges
+	lounges, total, err := h.loungeRepo.GetActiveLoungesPaginated(limit, offset)
 	if err != nil {
 		log.Printf("ERROR: Failed to get active lounges: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -783,7 +796,7 @@ func (h *LoungeHandler) GetAllActiveLounges(c *gin.Context) {
 		return
 	}
 
-	// Convert to response format
+	// Convert to response format with optimized images
 	response := make([]gin.H, 0, len(lounges))
 	for _, lounge := range lounges {
 		// Parse JSONB fields
@@ -797,12 +810,8 @@ func (h *LoungeHandler) GetAllActiveLounges(c *gin.Context) {
 			json.Unmarshal(lounge.Images, &images)
 		}
 
-		// Get routes for this lounge
-		loungeRoutes, err := h.loungeRouteRepo.GetLoungeRoutes(lounge.ID)
-		if err != nil {
-			log.Printf("WARNING: Failed to get routes for lounge %s: %v", lounge.ID, err)
-			loungeRoutes = []models.LoungeRoute{} // Empty array on error
-		}
+		// Optimize image URLs based on requested quality
+		optimizedImages := optimizeImageURLs(images, imageQuality)
 
 		response = append(response, gin.H{
 			"id":              lounge.ID,
@@ -817,16 +826,24 @@ func (h *LoungeHandler) GetAllActiveLounges(c *gin.Context) {
 			"price_3_hours":   lounge.Price3Hours,
 			"price_until_bus": lounge.PriceUntilBus,
 			"amenities":       amenities,
-			"images":          images,
-			"routes":          loungeRoutes,
+			"images":          optimizedImages,
 			"average_rating":  lounge.AverageRating,
 			"state":           lounge.State.String,
 		})
 	}
 
+	// Set aggressive cache headers for image endpoints
+	c.Header("Cache-Control", "public, max-age=86400, immutable") // 24 hour cache
+	c.Header("Content-Type", "application/json")
+	c.Header("X-Content-Type-Options", "nosniff")
+	c.Header("Vary", "Accept-Encoding") // Cache separate versions for gzip/deflate
+	
 	c.JSON(http.StatusOK, gin.H{
 		"lounges": response,
-		"total":   len(response),
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+		"has_more": offset+limit < int(total),
 	})
 }
 
@@ -855,11 +872,14 @@ func (h *LoungeHandler) GetDistinctStates(c *gin.Context) {
 }
 
 // GetLoungesByStop handles GET /api/v1/lounges/by-stop/:stopId
-// @Summary Get lounges that serve a specific stop
-// @Description Returns all active lounges that serve the given bus stop (as either stop_before or stop_after)
+// @Summary Get lounges that serve a specific stop with pagination
+// @Description Returns active lounges that serve the given bus stop with pagination support
 // @Tags Lounges
 // @Produce json
 // @Param stopId path string true "Stop ID (UUID)"
+// @Param limit query int false "Items per page (default 20)"
+// @Param offset query int false "Pagination offset (default 0)"
+// @Param image_quality query string false "Image quality: sd (480px), hd (720px), full (original)"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -875,7 +895,26 @@ func (h *LoungeHandler) GetLoungesByStop(c *gin.Context) {
 		return
 	}
 
-	lounges, err := h.loungeRepo.GetLoungesByStopID(stopID)
+	// Parse pagination params
+	limit := 20
+	offset := 0
+	imageQuality := "sd"
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+	if quality := c.Query("image_quality"); quality != "" && (quality == "sd" || quality == "hd" || quality == "full") {
+		imageQuality = quality
+	}
+
+	lounges, total, err := h.loungeRepo.GetLoungesByStopIDPaginated(stopID, limit, offset)
 	if err != nil {
 		log.Printf("ERROR: Failed to get lounges by stop %s: %v", stopID, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -885,7 +924,7 @@ func (h *LoungeHandler) GetLoungesByStop(c *gin.Context) {
 		return
 	}
 
-	// Build response with parsed JSON fields
+	// Build response with optimized images
 	response := make([]gin.H, 0)
 	for _, lounge := range lounges {
 		// Parse amenities JSON
@@ -897,7 +936,7 @@ func (h *LoungeHandler) GetLoungesByStop(c *gin.Context) {
 			amenities = []string{}
 		}
 
-		// Parse images JSON
+		// Parse and optimize images
 		var images []string
 		if len(lounge.Images) > 0 {
 			json.Unmarshal(lounge.Images, &images)
@@ -905,6 +944,7 @@ func (h *LoungeHandler) GetLoungesByStop(c *gin.Context) {
 		if images == nil {
 			images = []string{}
 		}
+		optimizedImages := optimizeImageURLs(images, imageQuality)
 
 		response = append(response, gin.H{
 			"id":              lounge.ID,
@@ -924,25 +964,32 @@ func (h *LoungeHandler) GetLoungesByStop(c *gin.Context) {
 			"status":          lounge.Status,
 			"is_operational":  lounge.IsOperational,
 			"amenities":       amenities,
-			"images":          images,
+			"images":          optimizedImages,
 			"average_rating":  lounge.AverageRating.String,
 			"state":           lounge.State.String,
 		})
 	}
 
+	c.Header("Cache-Control", "public, max-age=300")
 	c.JSON(http.StatusOK, gin.H{
-		"lounges": response,
-		"stop_id": stopID,
-		"total":   len(response),
+		"lounges":  response,
+		"stop_id":  stopID,
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+		"has_more": offset+limit < int(total),
 	})
 }
 
 // GetLoungesByRoute handles GET /api/v1/lounges/by-route/:routeId
-// @Summary Get lounges that serve a specific route
-// @Description Returns all active lounges that serve the given route
+// @Summary Get lounges that serve a specific route with pagination
+// @Description Returns active lounges that serve the given route with pagination support
 // @Tags Lounges
 // @Produce json
 // @Param routeId path string true "Route ID (UUID)"
+// @Param limit query int false "Items per page (default 20)"
+// @Param offset query int false "Pagination offset (default 0)"
+// @Param image_quality query string false "Image quality: sd (480px), hd (720px), full (original)"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
@@ -958,7 +1005,26 @@ func (h *LoungeHandler) GetLoungesByRoute(c *gin.Context) {
 		return
 	}
 
-	lounges, err := h.loungeRepo.GetLoungesByRouteID(routeID)
+	// Parse pagination params
+	limit := 20
+	offset := 0
+	imageQuality := "sd"
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+	if quality := c.Query("image_quality"); quality != "" && (quality == "sd" || quality == "hd" || quality == "full") {
+		imageQuality = quality
+	}
+
+	lounges, total, err := h.loungeRepo.GetLoungesByRouteIDPaginated(routeID, limit, offset)
 	if err != nil {
 		log.Printf("ERROR: Failed to get lounges by route %s: %v", routeID, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -968,7 +1034,7 @@ func (h *LoungeHandler) GetLoungesByRoute(c *gin.Context) {
 		return
 	}
 
-	// Build response with parsed JSON fields
+	// Build response with optimized images
 	response := make([]gin.H, 0)
 	for _, lounge := range lounges {
 		// Parse amenities JSON
@@ -980,7 +1046,7 @@ func (h *LoungeHandler) GetLoungesByRoute(c *gin.Context) {
 			amenities = []string{}
 		}
 
-		// Parse images JSON
+		// Parse and optimize images
 		var images []string
 		if len(lounge.Images) > 0 {
 			json.Unmarshal(lounge.Images, &images)
@@ -988,6 +1054,7 @@ func (h *LoungeHandler) GetLoungesByRoute(c *gin.Context) {
 		if images == nil {
 			images = []string{}
 		}
+		optimizedImages := optimizeImageURLs(images, imageQuality)
 
 		response = append(response, gin.H{
 			"id":              lounge.ID,
@@ -1007,16 +1074,20 @@ func (h *LoungeHandler) GetLoungesByRoute(c *gin.Context) {
 			"status":          lounge.Status,
 			"is_operational":  lounge.IsOperational,
 			"amenities":       amenities,
-			"images":          images,
+			"images":          optimizedImages,
 			"average_rating":  lounge.AverageRating.String,
 			"state":           lounge.State.String,
 		})
 	}
 
+	c.Header("Cache-Control", "public, max-age=300")
 	c.JSON(http.StatusOK, gin.H{
 		"lounges":  response,
 		"route_id": routeID,
-		"total":    len(response),
+		"total":    total,
+		"limit":    limit,
+		"offset":   offset,
+		"has_more": offset+limit < int(total),
 	})
 }
 

@@ -532,16 +532,55 @@ func (h *LoungeBookingDriverAssignmentHandler) CancelAssignment(c *gin.Context) 
 		return
 	}
 
+	h.sendDriverCancellationSMS(assignment.DriverContact, assignment.GuestName)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "Assignment cancelled successfully",
 		"assignment_id": assignmentID,
 	})
 }
 
+func (h *LoungeBookingDriverAssignmentHandler) sendDriverCancellationSMS(driverContact, guestName string) {
+	if h.smsGateway == nil {
+		return
+	}
+
+	phone := strings.TrimSpace(driverContact)
+	if phone == "" {
+		return
+	}
+
+	name := strings.TrimSpace(guestName)
+	if name == "" {
+		name = "Guest"
+	}
+
+	message := "The booking for passenger " + name + " has been cancelled."
+	if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
+		log.Printf("WARN: Failed to send cancellation SMS to %s: %v", phone, err)
+		return
+	}
+
+	log.Printf("INFO: Cancellation SMS sent to driver %s", phone)
+}
+
 // CheckDriverAssignment handles GET /api/v1/lounge-booking-driver-assignments/check/:booking_id
 // Checks if a driver is already assigned to a specific booking
 func (h *LoungeBookingDriverAssignmentHandler) CheckDriverAssignment(c *gin.Context) {
+	h.getAssignedDriverByBooking(c)
+}
+
+// GetAssignedDriverByBooking handles GET /api/v1/lounge-bookings/:id/assigned-driver
+// Returns the active driver assignment for a booking, if one exists.
+func (h *LoungeBookingDriverAssignmentHandler) GetAssignedDriverByBooking(c *gin.Context) {
+	h.getAssignedDriverByBooking(c)
+}
+
+func (h *LoungeBookingDriverAssignmentHandler) getAssignedDriverByBooking(c *gin.Context) {
 	bookingIDStr := c.Param("booking_id")
+	if bookingIDStr == "" {
+		bookingIDStr = c.Param("id")
+	}
 	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -557,6 +596,9 @@ func (h *LoungeBookingDriverAssignmentHandler) CheckDriverAssignment(c *gin.Cont
 		c.JSON(http.StatusOK, gin.H{
 			"assigned":   false,
 			"assignment": nil,
+			"assignment_id":     nil,
+			"assigned_driver_id": nil,
+			"booking_id":        bookingID,
 		})
 		return
 	}
@@ -565,12 +607,18 @@ func (h *LoungeBookingDriverAssignmentHandler) CheckDriverAssignment(c *gin.Cont
 		c.JSON(http.StatusOK, gin.H{
 			"assigned":   false,
 			"assignment": nil,
+			"assignment_id":     nil,
+			"assigned_driver_id": nil,
+			"booking_id":        bookingID,
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"assigned":   true,
-		"assignment": assignment,
+		"assigned":          true,
+		"assignment_id":     assignment.ID,
+		"assigned_driver_id": assignment.DriverID,
+		"booking_id":        assignment.LoungeBookingID,
+		"assignment":        assignment,
 	})
 }
