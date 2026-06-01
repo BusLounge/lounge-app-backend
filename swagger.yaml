@@ -13904,10 +13904,376 @@ paths:
         "401":
           description: Unauthorized
 
-# ============================================================================
-# Components (Schemas, Responses, SecuritySchemes)
-# ============================================================================
-components:
+  # Additional lounge-related paths discovered in code but not present above
+  /api/v1/lounge-bookings/{id}/assigned-driver:
+    get:
+      summary: Get active assigned driver for a lounge booking
+      operationId: getAssignedDriverByBooking
+      tags:
+        - Lounge Driver Assignments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Assigned driver retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/lounges/{id}/bookings:
+    get:
+      summary: Get lounge bookings for owner (by lounge id)
+      operationId: getLoungeBookingsForOwnerByLounge
+      tags:
+        - Lounge Bookings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Bookings list returned
+
+  /api/v1/lounges/{id}/bookings-with-orders:
+    get:
+      summary: Get lounge bookings with orders for owner
+      operationId: getLoungeBookingsWithOrdersByLounge
+      tags:
+        - Lounge Bookings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Bookings with orders returned
+
+  /api/v1/lounges/{id}/bookings/today:
+    get:
+      summary: Get today's lounge bookings for owner
+      operationId: getTodaysBookingsByLounge
+      tags:
+        - Lounge Bookings
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Today's bookings returned
+
+  /api/v1/lounges/{id}/drivers:
+    get:
+      summary: Get drivers for a lounge
+      operationId: getDriversByLounge
+      tags:
+        - Lounge Driver Assignments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Drivers retrieved
+
+  /api/v1/lounges/{id}/drivers/{driver_id}:
+    put:
+      summary: Update driver in lounge
+      operationId: updateDriverByLounge
+      tags:
+        - Lounge Driver Assignments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: driver_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Driver updated
+
+  /api/v1/lounges/{id}/products:
+    get:
+      summary: Get products for a lounge
+      operationId: getLoungeProductsByLounge
+      tags:
+        - Lounge Products
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Product list returned
+
+  /api/v1/lounges/{id}/products/{product_id}:
+    put:
+      summary: Update product for a lounge
+      operationId: updateLoungeProduct
+      tags:
+        - Lounge Products
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Product updated
+
+  /api/v1/lounges/{id}/staff:
+    get:
+      summary: Get staff for a lounge (with optional filters)
+      operationId: getStaffByLounge
+      tags:
+        - Lounge Staff
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Staff list returned
+
+  /api/v1/lounges/{id}/staff/direct-add:
+    post:
+      summary: Owner directly add staff to lounge
+      operationId: addStaffToLoungeDirectByOwner
+      tags:
+        - Lounge Staff
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "201":
+          description: Staff added
+
+  /api/v1/lounges/{id}/staff/{staff_id}:
+    delete:
+      summary: Remove staff from lounge
+      operationId: removeStaffFromLounge
+      tags:
+        - Lounge Staff
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Staff removed
+
+  /api/v1/lounges/{id}/staff/{staff_id}/approval:
+    put:
+      summary: Approve or decline lounge staff application
+      operationId: approveLoungeStaffApplicationByLounge
+      tags:
+        - Lounge Staff
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Approval status updated
+
+  /api/v1/lounges/{id}/staff/{staff_id}/status:
+    put:
+      summary: Update staff status in lounge
+      operationId: updateLoungeStaffStatusByLounge
+      tags:
+        - Lounge Staff
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: staff_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Staff status updated
+
+  /api/v1/lounges/{id}/transport-locations:
+    get:
+      summary: Get transport locations for a lounge
+      operationId: getLoungeTransportLocationsByLounge
+      tags:
+        - Lounge
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Transport locations returned
+
+  /api/v1/lounges/{id}/transport-locations/{location_id}:
+    put:
+      summary: Update a transport location for a lounge
+      operationId: updateLoungeTransportLocationByID
+      tags:
+        - Lounge
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: location_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Transport location updated
+
+  /api/v1/lounges/{id}/transport-locations/{location_id}/prices:
+    post:
+      summary: Set transport location prices for a lounge
+      operationId: setLoungeTransportLocationPricesByLounge
+      tags:
+        - Lounge
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: location_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Prices set
+
+  # ============================================================================
+  # Components (Schemas, Responses, SecuritySchemes)
+  # ============================================================================
+  components:
   securitySchemes:
     BearerAuth:
       type: http
