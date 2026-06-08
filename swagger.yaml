@@ -115,6 +115,8 @@ tags:
     SMS notification on assignment creation
 - name: Active Trips
   description: Active trip passenger management and operations for conductors/drivers
+- name: Lounge Special Packages
+  description: Lounge special package management and details
 paths:
   /health:
     get:
@@ -9084,6 +9086,167 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounges/{lounge_id}/special-packages:
+    get:
+      summary: Get special packages for a lounge
+      operationId: getSpecialPackages
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: lounge_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Special packages list returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  special_packages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LoungeSpecialPackage'
+                  total:
+                    type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create a special package for a lounge
+      operationId: createSpecialPackage
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: lounge_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLoungeSpecialPackageRequest'
+      responses:
+        '201':
+          description: Special package created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoungeSpecialPackage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounges/{lounge_id}/special-packages/{package_id}:
+    put:
+      summary: Update a special package for a lounge
+      operationId: updateSpecialPackage
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: lounge_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: package_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLoungeSpecialPackageRequest'
+      responses:
+        '200':
+          description: Special package updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoungeSpecialPackage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Delete a special package from a lounge
+      operationId: deleteSpecialPackage
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: lounge_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: package_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Special package deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Special package deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/lounge-bookings:
     post:
       summary: Create lounge booking
@@ -14446,454 +14609,6 @@ paths:
             application/json:
               schema:
                 type: object
-  /api/v1/lounges/{id}/bookings:
-    get:
-      summary: Get lounge bookings for owner (by lounge id)
-      operationId: getLoungeBookingsForOwnerByLounge
-      tags:
-      - Lounge Bookings
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Bookings list returned
-  /api/v1/lounges/{id}/bookings-with-orders:
-    get:
-      summary: Get lounge bookings with orders for owner
-      operationId: getLoungeBookingsWithOrdersByLounge
-      tags:
-      - Lounge Bookings
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Bookings with orders returned
-  /api/v1/lounges/{id}/bookings/today:
-    get:
-      summary: Get today's lounge bookings for owner
-      operationId: getTodaysBookingsByLounge
-      tags:
-      - Lounge Bookings
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Today's bookings returned
-  /api/v1/lounges/{id}/drivers:
-    get:
-      summary: Get drivers for a lounge
-      operationId: getDriversByLounge
-      tags:
-      - Lounge Driver Assignments
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Drivers retrieved
-  /api/v1/lounges/{id}/drivers/{driver_id}:
-    put:
-      summary: Update driver in lounge
-      operationId: updateDriverByLounge
-      tags:
-      - Lounge Driver Assignments
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: driver_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Driver updated
-  /api/v1/lounges/{id}/products:
-    get:
-      summary: Get products for a lounge
-      operationId: getLoungeProductsByLounge
-      tags:
-      - Lounge Products
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Product list returned
-  /api/v1/lounges/{id}/products/{product_id}:
-    put:
-      summary: Update product for a lounge
-      operationId: updateLoungeProduct
-      tags:
-      - Lounge Products
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: product_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Product updated
-  /api/v1/lounges/{id}/special-packages:
-    get:
-      summary: Get special packages for a lounge
-      operationId: getSpecialPackages
-      tags:
-      - Lounge Special Packages
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Special packages list returned
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  special_packages:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/LoungeSpecialPackage'
-                  total:
-                    type: integer
-    post:
-      summary: Create a special package for a lounge
-      operationId: createSpecialPackage
-      tags:
-      - Lounge Special Packages
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateLoungeSpecialPackageRequest'
-      responses:
-        '201':
-          description: Special package created successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LoungeSpecialPackage'
-  /api/v1/lounges/{id}/special-packages/{package_id}:
-    put:
-      summary: Update a special package for a lounge
-      operationId: updateSpecialPackage
-      tags:
-      - Lounge Special Packages
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: package_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateLoungeSpecialPackageRequest'
-      responses:
-        '200':
-          description: Special package updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LoungeSpecialPackage'
-    delete:
-      summary: Delete a special package from a lounge
-      operationId: deleteSpecialPackage
-      tags:
-      - Lounge Special Packages
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: package_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Special package deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Special package deleted successfully
-  /api/v1/lounges/{id}/staff:
-    get:
-      summary: Get staff for a lounge (with optional filters)
-      operationId: getStaffByLounge
-      tags:
-      - Lounge Staff
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Staff list returned
-  /api/v1/lounges/{id}/staff/direct-add:
-    post:
-      summary: Owner directly add staff to lounge
-      operationId: addStaffToLoungeDirectByOwner
-      tags:
-      - Lounge Staff
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '201':
-          description: Staff added
-  /api/v1/lounges/{id}/staff/{staff_id}:
-    delete:
-      summary: Remove staff from lounge
-      operationId: removeStaffFromLounge
-      tags:
-      - Lounge Staff
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: staff_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Staff removed
-  /api/v1/lounges/{id}/staff/{staff_id}/approval:
-    put:
-      summary: Approve or decline lounge staff application
-      operationId: approveLoungeStaffApplicationByLounge
-      tags:
-      - Lounge Staff
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: staff_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200':
-          description: Approval status updated
-  /api/v1/lounges/{id}/staff/{staff_id}/status:
-    put:
-      summary: Update staff status in lounge
-      operationId: updateLoungeStaffStatusByLounge
-      tags:
-      - Lounge Staff
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: staff_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Staff status updated
-  /api/v1/lounges/{id}/transport-locations:
-    get:
-      summary: Get transport locations for a lounge
-      operationId: getLoungeTransportLocationsByLounge
-      tags:
-      - Lounge
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Transport locations returned
-  /api/v1/lounges/{id}/transport-locations/{location_id}:
-    put:
-      summary: Update a transport location for a lounge
-      operationId: updateLoungeTransportLocationByID
-      tags:
-      - Lounge
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: location_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Transport location updated
-  /api/v1/lounges/{id}/transport-locations/{location_id}/prices:
-    post:
-      summary: Set transport location prices for a lounge
-      operationId: setLoungeTransportLocationPricesByLounge
-      tags:
-      - Lounge
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: location_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200':
-          description: Prices set
 components:
   securitySchemes:
     BearerAuth:
@@ -18012,6 +17727,31 @@ components:
         price:
           type: string
           example: '1500.00'
+    UpdateLoungeSpecialPackageRequest:
+      type: object
+      properties:
+        package_name:
+          type: string
+          example: Premium Airport Lounge Access
+        image_url:
+          type: string
+          nullable: true
+        package_type:
+          type: string
+          enum:
+          - platinum
+          - gold
+          - standard
+          example: standard
+        description:
+          type: string
+          example: Detailed itinerary, destinations covered, and perks included in this package.
+        price:
+          type: string
+          example: '1500.00'
+        is_active:
+          type: boolean
+          example: true
     CreateLoungeProductRequest:
       type: object
       required:
