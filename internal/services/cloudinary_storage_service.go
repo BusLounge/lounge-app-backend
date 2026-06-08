@@ -86,6 +86,10 @@ func (s *CloudinaryStorageService) UploadProductImage(ctx context.Context, file 
 	return s.uploadImage(ctx, file, originalFilename, "lounge-products", loungeID, "product")
 }
 
+func (s *CloudinaryStorageService) UploadSpecialPackageImage(ctx context.Context, file multipart.File, originalFilename, loungeID string) (CloudinaryUploadResult, error) {
+	return s.uploadImage(ctx, file, originalFilename, "lounge-special-packages", loungeID, "package")
+}
+
 func (s *CloudinaryStorageService) UploadNICImage(ctx context.Context, file multipart.File, originalFilename, userID, side string) (CloudinaryUploadResult, error) {
 	return s.uploadImage(ctx, file, originalFilename, "lounge-owner-nic", userID, normalizeSegment(side, "front"))
 }

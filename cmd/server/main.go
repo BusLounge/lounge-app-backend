@@ -295,6 +295,12 @@ func main() {
 	}
 	storageHandler := handlers.NewStorageHandler(cloudinaryStorageService, loungeOwnerRepository, loungeRepository)
 
+	// Initialize lounge special packages system
+	logger.Info("📦 Initializing lounge special packages system...")
+	loungeSpecialPackageRepo := database.NewLoungeSpecialPackageRepository(db)
+	loungeSpecialPackageHandler := handlers.NewLoungeSpecialPackageHandler(loungeSpecialPackageRepo, loungeRepository, loungeOwnerRepository)
+	logger.Info("✓ Lounge special packages system initialized")
+
 	// Initialize Lounge Booking Driver Assignment system
 	logger.Info("Initializing lounge booking driver assignment system...")
 	loungeBookingDriverAssignmentRepo := database.NewLoungeBookingDriverAssignmentRepository(sqlxDB.DB)
@@ -705,6 +711,8 @@ func main() {
 			uploads.POST("/lounge-products/:lounge_id/image", storageHandler.UploadProductImage)
 			logger.Info("  ✅ POST /api/v1/uploads/lounge-owner/:user_id/nic/:side")
 			uploads.POST("/lounge-owner/:user_id/nic/:side", storageHandler.UploadManagerNICImage)
+			logger.Info("  ✅ POST /api/v1/uploads/lounge-special-packages/:lounge_id/image")
+			uploads.POST("/lounge-special-packages/:lounge_id/image", storageHandler.UploadSpecialPackageImage)
 			logger.Info("  ✅ POST /api/v1/uploads/image/delete")
 			uploads.POST("/image/delete", storageHandler.DeleteImage)
 		}
@@ -835,6 +843,16 @@ func main() {
 			loungesProtectedProducts.PUT("/:id/products/:product_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeBookingHandler.UpdateProduct)
 			logger.Info("  ✅ DELETE /api/v1/lounges/:id/products/:product_id (requires approval)")
 			loungesProtectedProducts.DELETE("/:id/products/:product_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeBookingHandler.DeleteProduct)
+
+			// Special Packages for a lounge
+			logger.Info("  ✅ GET /api/v1/lounges/:id/special-packages (read-only, no approval needed)")
+			loungesProtectedProducts.GET("/:id/special-packages", loungeSpecialPackageHandler.GetSpecialPackages)
+			logger.Info("  ✅ POST /api/v1/lounges/:id/special-packages (requires approval)")
+			loungesProtectedProducts.POST("/:id/special-packages", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.CreateSpecialPackage)
+			logger.Info("  ✅ PUT /api/v1/lounges/:id/special-packages/:package_id (requires approval)")
+			loungesProtectedProducts.PUT("/:id/special-packages/:package_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.UpdateSpecialPackage)
+			logger.Info("  ✅ DELETE /api/v1/lounges/:id/special-packages/:package_id (requires approval)")
+			loungesProtectedProducts.DELETE("/:id/special-packages/:package_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.DeleteSpecialPackage)
 
 			// Bookings for a lounge (owner/staff view - read-only, no approval needed)
 			logger.Info("  ✅ GET /api/v1/lounges/:id/bookings (owner/staff, read-only)")

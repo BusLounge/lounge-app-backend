@@ -103,6 +103,39 @@ func (h *StorageHandler) UploadProductImage(c *gin.Context) {
 	})
 }
 
+func (h *StorageHandler) UploadSpecialPackageImage(c *gin.Context) {
+	if err := h.authorizeLoungeUpload(c); err != nil {
+		return
+	}
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "image file is required"})
+		return
+	}
+	file, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "upload_failed", Message: "failed to read uploaded file"})
+		return
+	}
+	defer closeMultipartFile(file)
+
+	loungeID := c.Param("lounge_id")
+	result, err := h.cloudinaryService.UploadSpecialPackageImage(c.Request.Context(), file, fileHeader.Filename, loungeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "upload_failed", Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"url":       result.SecureURL,
+		"public_id": result.PublicID,
+		"asset_id":  result.AssetID,
+		"entity":    "special_package_image",
+		"lounge_id": loungeID,
+		"filename":  fileHeader.Filename,
+	})
+}
+
 func (h *StorageHandler) UploadManagerNICImage(c *gin.Context) {
 	userCtx, exists := middleware.GetUserContext(c)
 	if !exists {

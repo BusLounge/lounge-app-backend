@@ -5065,6 +5065,55 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /api/v1/uploads/lounge-special-packages/{lounge_id}/image:
+    post:
+      summary: Upload a lounge special package image
+      description: 'Upload a special package image to Cloudinary and return the public secure
+        URL.
+
+        The returned URL should be stored in `image_url` on the package.
+
+        '
+      operationId: uploadSpecialPackageImage
+      tags:
+      - Uploads
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: lounge_id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Lounge ID used to group uploaded assets in Cloudinary
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Special package image file to upload
+      responses:
+        '200':
+          description: Special package image uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudinaryUploadResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/uploads/lounge-owner/{user_id}/nic/{side}:
     post:
       summary: Upload a lounge owner NIC image
@@ -14535,6 +14584,127 @@ paths:
       responses:
         '200':
           description: Product updated
+  /api/v1/lounges/{id}/special-packages:
+    get:
+      summary: Get special packages for a lounge
+      operationId: getSpecialPackages
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Special packages list returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  special_packages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LoungeSpecialPackage'
+                  total:
+                    type: integer
+    post:
+      summary: Create a special package for a lounge
+      operationId: createSpecialPackage
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLoungeSpecialPackageRequest'
+      responses:
+        '201':
+          description: Special package created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoungeSpecialPackage'
+  /api/v1/lounges/{id}/special-packages/{package_id}:
+    put:
+      summary: Update a special package for a lounge
+      operationId: updateSpecialPackage
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: package_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLoungeSpecialPackageRequest'
+      responses:
+        '200':
+          description: Special package updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoungeSpecialPackage'
+    delete:
+      summary: Delete a special package from a lounge
+      operationId: deleteSpecialPackage
+      tags:
+      - Lounge Special Packages
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: package_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Special package deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Special package deleted successfully
   /api/v1/lounges/{id}/staff:
     get:
       summary: Get staff for a lounge (with optional filters)
@@ -17776,6 +17946,72 @@ components:
         updated_at:
           type: string
           format: date-time
+    LoungeSpecialPackage:
+      type: object
+      description: Special package available at a lounge (e.g. standard, gold, platinum tiers)
+      properties:
+        id:
+          type: string
+          format: uuid
+        lounge_id:
+          type: string
+          format: uuid
+        package_name:
+          type: string
+          example: Premium Airport Lounge Access
+        image_url:
+          type: string
+          nullable: true
+        package_type:
+          type: string
+          enum:
+          - platinum
+          - gold
+          - standard
+          example: standard
+          description: Tier of special package
+        description:
+          type: string
+          example: Detailed itinerary, destinations covered, and perks included in this package.
+        price:
+          type: string
+          example: '1500.00'
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateLoungeSpecialPackageRequest:
+      type: object
+      required:
+      - package_name
+      - package_type
+      - description
+      - price
+      properties:
+        package_name:
+          type: string
+          example: Premium Airport Lounge Access
+        image_url:
+          type: string
+          nullable: true
+        package_type:
+          type: string
+          enum:
+          - platinum
+          - gold
+          - standard
+          example: standard
+        description:
+          type: string
+          example: Detailed itinerary, destinations covered, and perks included in this package.
+        price:
+          type: string
+          example: '1500.00'
     CreateLoungeProductRequest:
       type: object
       required:
