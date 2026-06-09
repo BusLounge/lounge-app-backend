@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -38,11 +39,26 @@ func NewLoungeSpecialPackageHandler(
 
 // CreateSpecialPackageRequest is the request body for creating a package
 type CreateSpecialPackageRequest struct {
-	PackageName string `json:"package_name" binding:"required"`
+	PackageName string  `json:"package_name" binding:"required"`
 	ImageURL    *string `json:"image_url,omitempty"`
 	PackageType string  `json:"package_type" binding:"required"`
-	Description string  `json:"description" binding:"required"`
-	Price       string  `json:"price" binding:"required"`
+	Description string  `json:"description"  binding:"required"`
+	Price       string  `json:"price"        binding:"required"`
+
+	// Extended fields
+	Pax                *int64          `json:"pax,omitempty"`
+	TransportStatus    *bool           `json:"transport_status,omitempty"`
+	TransportMode      *string         `json:"transport_mode,omitempty"`
+	MealStatus         *bool           `json:"meal_status,omitempty"`
+	BreakfastStatus    *bool           `json:"breakfast_status,omitempty"`
+	BreakfastType      json.RawMessage `json:"breakfast_type,omitempty"`
+	LunchStatus        *bool           `json:"lunch_status,omitempty"`
+	LunchType          json.RawMessage `json:"lunch_type,omitempty"`
+	EveningSnackStatus *bool           `json:"evening_snack_status,omitempty"`
+	EveningSnackType   json.RawMessage `json:"evening_snack_type,omitempty"`
+	DinnerStatus       *bool           `json:"dinner_status,omitempty"`
+	DinnerType         json.RawMessage `json:"dinner_type,omitempty"`
+	Places             json.RawMessage `json:"places,omitempty"`
 }
 
 // UpdateSpecialPackageRequest is the request body for updating a package
@@ -52,6 +68,21 @@ type UpdateSpecialPackageRequest struct {
 	PackageType string  `json:"package_type"`
 	Description string  `json:"description"`
 	Price       string  `json:"price"`
+
+	// Extended fields
+	Pax                *int64          `json:"pax,omitempty"`
+	TransportStatus    *bool           `json:"transport_status,omitempty"`
+	TransportMode      *string         `json:"transport_mode,omitempty"`
+	MealStatus         *bool           `json:"meal_status,omitempty"`
+	BreakfastStatus    *bool           `json:"breakfast_status,omitempty"`
+	BreakfastType      json.RawMessage `json:"breakfast_type,omitempty"`
+	LunchStatus        *bool           `json:"lunch_status,omitempty"`
+	LunchType          json.RawMessage `json:"lunch_type,omitempty"`
+	EveningSnackStatus *bool           `json:"evening_snack_status,omitempty"`
+	EveningSnackType   json.RawMessage `json:"evening_snack_type,omitempty"`
+	DinnerStatus       *bool           `json:"dinner_status,omitempty"`
+	DinnerType         json.RawMessage `json:"dinner_type,omitempty"`
+	Places             json.RawMessage `json:"places,omitempty"`
 }
 
 // ============================================================================
@@ -66,6 +97,10 @@ func isValidPackageType(t string) bool {
 		return true
 	}
 	return false
+}
+
+func isValidTransportMode(m string) bool {
+	return models.IsValidTransportMode(m)
 }
 
 func (h *LoungeSpecialPackageHandler) verifyLoungeOwnership(c *gin.Context, loungeID uuid.UUID) (bool, error) {
@@ -104,7 +139,7 @@ func (h *LoungeSpecialPackageHandler) verifyLoungeOwnership(c *gin.Context, loun
 }
 
 func packageToResponse(pkg *models.LoungeSpecialPackage) gin.H {
-	return gin.H{
+	resp := gin.H{
 		"id":           pkg.ID.String(),
 		"lounge_id":    pkg.LoungeID.String(),
 		"package_name": pkg.PackageName,
@@ -115,7 +150,48 @@ func packageToResponse(pkg *models.LoungeSpecialPackage) gin.H {
 		"is_active":    pkg.IsActive,
 		"created_at":   pkg.CreatedAt,
 		"updated_at":   pkg.UpdatedAt,
+		// Extended fields
+		"pax":                  pkg.Pax,
+		"transport_status":     pkg.TransportStatus,
+		"transport_mode":       pkg.TransportMode,
+		"meal_status":          pkg.MealStatus,
+		"breakfast_status":     pkg.BreakfastStatus,
+		"breakfast_type":       pkg.BreakfastType,
+		"lunch_status":         pkg.LunchStatus,
+		"lunch_type":           pkg.LunchType,
+		"evening_snack_status": pkg.EveningSnackStatus,
+		"evening_snack_type":   pkg.EveningSnackType,
+		"dinner_status":        pkg.DinnerStatus,
+		"dinner_type":          pkg.DinnerType,
+		"places":               pkg.Places,
 	}
+	return resp
+}
+
+// applyExtendedFields copies extended request fields into the model
+func applyExtendedFields(pkg *models.LoungeSpecialPackage,
+	pax *int64,
+	transportStatus *bool, transportMode *string,
+	mealStatus *bool,
+	breakfastStatus *bool, breakfastType json.RawMessage,
+	lunchStatus *bool, lunchType json.RawMessage,
+	eveningSnackStatus *bool, eveningSnackType json.RawMessage,
+	dinnerStatus *bool, dinnerType json.RawMessage,
+	places json.RawMessage,
+) {
+	pkg.Pax = pax
+	pkg.TransportStatus = transportStatus
+	pkg.TransportMode = transportMode
+	pkg.MealStatus = mealStatus
+	pkg.BreakfastStatus = breakfastStatus
+	pkg.BreakfastType = breakfastType
+	pkg.LunchStatus = lunchStatus
+	pkg.LunchType = lunchType
+	pkg.EveningSnackStatus = eveningSnackStatus
+	pkg.EveningSnackType = eveningSnackType
+	pkg.DinnerStatus = dinnerStatus
+	pkg.DinnerType = dinnerType
+	pkg.Places = places
 }
 
 // ============================================================================
@@ -179,6 +255,17 @@ func (h *LoungeSpecialPackageHandler) CreateSpecialPackage(c *gin.Context) {
 		return
 	}
 
+	// Validate transport mode if transport is enabled
+	if req.TransportStatus != nil && *req.TransportStatus && req.TransportMode != nil {
+		if !isValidTransportMode(*req.TransportMode) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "validation_error",
+				Message: "Invalid transport_mode. Must be one of: three-wheeler, van, car",
+			})
+			return
+		}
+	}
+
 	pkg := &models.LoungeSpecialPackage{
 		LoungeID:    loungeID,
 		PackageName: req.PackageName,
@@ -187,6 +274,17 @@ func (h *LoungeSpecialPackageHandler) CreateSpecialPackage(c *gin.Context) {
 		Description: req.Description,
 		Price:       req.Price,
 	}
+
+	applyExtendedFields(pkg,
+		req.Pax,
+		req.TransportStatus, req.TransportMode,
+		req.MealStatus,
+		req.BreakfastStatus, req.BreakfastType,
+		req.LunchStatus, req.LunchType,
+		req.EveningSnackStatus, req.EveningSnackType,
+		req.DinnerStatus, req.DinnerType,
+		req.Places,
+	)
 
 	if err := h.pkgRepo.CreateSpecialPackage(pkg); err != nil {
 		log.Printf("ERROR: Failed to create special package: %v", err)
@@ -239,7 +337,7 @@ func (h *LoungeSpecialPackageHandler) UpdateSpecialPackage(c *gin.Context) {
 		return
 	}
 
-	// Apply updates
+	// Apply base field updates
 	if req.PackageName != "" {
 		pkg.PackageName = req.PackageName
 	}
@@ -262,6 +360,29 @@ func (h *LoungeSpecialPackageHandler) UpdateSpecialPackage(c *gin.Context) {
 	if req.Price != "" {
 		pkg.Price = req.Price
 	}
+
+	// Validate transport mode if provided and enabled
+	if req.TransportStatus != nil && *req.TransportStatus && req.TransportMode != nil {
+		if !isValidTransportMode(*req.TransportMode) {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "validation_error",
+				Message: "Invalid transport_mode. Must be one of: three-wheeler, van, car",
+			})
+			return
+		}
+	}
+
+	// Apply extended fields (always overwrite with whatever was sent)
+	applyExtendedFields(pkg,
+		req.Pax,
+		req.TransportStatus, req.TransportMode,
+		req.MealStatus,
+		req.BreakfastStatus, req.BreakfastType,
+		req.LunchStatus, req.LunchType,
+		req.EveningSnackStatus, req.EveningSnackType,
+		req.DinnerStatus, req.DinnerType,
+		req.Places,
+	)
 
 	if err := h.pkgRepo.UpdateSpecialPackage(pkg); err != nil {
 		log.Printf("ERROR: Failed to update special package %s: %v", pkgID, err)
