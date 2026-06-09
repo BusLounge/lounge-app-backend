@@ -17700,6 +17700,73 @@ components:
         updated_at:
           type: string
           format: date-time
+        pax:
+          type: integer
+          format: int64
+          nullable: true
+          example: 2
+        transport_status:
+          type: boolean
+          nullable: true
+          example: false
+        transport_mode:
+          type: string
+          enum:
+          - three-wheeler
+          - van
+          - car
+          nullable: true
+          example: car
+        meal_status:
+          type: boolean
+          nullable: true
+          example: false
+        breakfast_status:
+          type: boolean
+          nullable: true
+          example: false
+        breakfast_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Continental', 'English']
+        lunch_status:
+          type: boolean
+          nullable: true
+          example: false
+        lunch_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Rice and Curry', 'Pasta']
+        evening_snack_status:
+          type: boolean
+          nullable: true
+          example: false
+        evening_snack_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Sandwiches', 'Cake']
+        dinner_status:
+          type: boolean
+          nullable: true
+          example: false
+        dinner_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Noodles', 'Soup']
+        places:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Sigiriya', 'Pidurangala']
     CreateLoungeSpecialPackageRequest:
       type: object
       required:
@@ -17727,6 +17794,73 @@ components:
         price:
           type: string
           example: '1500.00'
+        pax:
+          type: integer
+          format: int64
+          nullable: true
+          example: 2
+        transport_status:
+          type: boolean
+          nullable: true
+          example: false
+        transport_mode:
+          type: string
+          enum:
+          - three-wheeler
+          - van
+          - car
+          nullable: true
+          example: car
+        meal_status:
+          type: boolean
+          nullable: true
+          example: false
+        breakfast_status:
+          type: boolean
+          nullable: true
+          example: false
+        breakfast_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Continental', 'English']
+        lunch_status:
+          type: boolean
+          nullable: true
+          example: false
+        lunch_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Rice and Curry', 'Pasta']
+        evening_snack_status:
+          type: boolean
+          nullable: true
+          example: false
+        evening_snack_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Sandwiches', 'Cake']
+        dinner_status:
+          type: boolean
+          nullable: true
+          example: false
+        dinner_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Noodles', 'Soup']
+        places:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Sigiriya', 'Pidurangala']
     UpdateLoungeSpecialPackageRequest:
       type: object
       properties:
@@ -17752,6 +17886,74 @@ components:
         is_active:
           type: boolean
           example: true
+        pax:
+          type: integer
+          format: int64
+          nullable: true
+          example: 2
+        transport_status:
+          type: boolean
+          nullable: true
+          example: false
+        transport_mode:
+          type: string
+          enum:
+          - three-wheeler
+          - van
+          - car
+          nullable: true
+          example: car
+        meal_status:
+          type: boolean
+          nullable: true
+          example: false
+        breakfast_status:
+          type: boolean
+          nullable: true
+          example: false
+        breakfast_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Continental', 'English']
+        lunch_status:
+          type: boolean
+          nullable: true
+          example: false
+          description: Lunch status
+        lunch_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Rice and Curry', 'Pasta']
+        evening_snack_status:
+          type: boolean
+          nullable: true
+          example: false
+        evening_snack_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Sandwiches', 'Cake']
+        dinner_status:
+          type: boolean
+          nullable: true
+          example: false
+        dinner_type:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Noodles', 'Soup']
+        places:
+          type: array
+          items:
+            type: string
+          nullable: true
+          example: ['Sigiriya', 'Pidurangala']
     CreateLoungeProductRequest:
       type: object
       required:
