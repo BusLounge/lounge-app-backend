@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -18,10 +19,12 @@ import (
 
 // LoungeBookingDriverAssignmentHandler handles driver assignment operations
 type LoungeBookingDriverAssignmentHandler struct {
-	assignmentRepo  *database.LoungeBookingDriverAssignmentRepository
-	loungeOwnerRepo *database.LoungeOwnerRepository
-	loungeRepo      *database.LoungeRepository
-	smsGateway      sms.SMSGateway
+	assignmentRepo   *database.LoungeBookingDriverAssignmentRepository
+	loungeOwnerRepo  *database.LoungeOwnerRepository
+	loungeRepo       *database.LoungeRepository
+	bookingRepo      *database.LoungeBookingRepository
+	loungeDriverRepo *database.LoungeDriverRepository
+	smsGateway       sms.SMSGateway
 }
 
 // NewLoungeBookingDriverAssignmentHandler creates a new handler
@@ -29,13 +32,17 @@ func NewLoungeBookingDriverAssignmentHandler(
 	assignmentRepo *database.LoungeBookingDriverAssignmentRepository,
 	loungeOwnerRepo *database.LoungeOwnerRepository,
 	loungeRepo *database.LoungeRepository,
+	bookingRepo *database.LoungeBookingRepository,
+	loungeDriverRepo *database.LoungeDriverRepository,
 	smsGateway sms.SMSGateway,
 ) *LoungeBookingDriverAssignmentHandler {
 	return &LoungeBookingDriverAssignmentHandler{
-		assignmentRepo:  assignmentRepo,
-		loungeOwnerRepo: loungeOwnerRepo,
-		loungeRepo:      loungeRepo,
-		smsGateway:      smsGateway,
+		assignmentRepo:   assignmentRepo,
+		loungeOwnerRepo:  loungeOwnerRepo,
+		loungeRepo:       loungeRepo,
+		bookingRepo:      bookingRepo,
+		loungeDriverRepo: loungeDriverRepo,
+		smsGateway:       smsGateway,
 	}
 }
 
@@ -125,7 +132,40 @@ func (h *LoungeBookingDriverAssignmentHandler) CreateAssignment(c *gin.Context) 
 		return
 	}
 
-	h.sendDriverAssignmentSMS(req.DriverContact, req.GuestName, req.GuestContact)
+	// Update transport_bookings status to confirmed
+	if err := h.assignmentRepo.UpdateTransportBookingStatus(assignment.LoungeBookingID, "confirmed"); err != nil {
+		log.Printf("ERROR: Failed to update transport booking status to confirmed: %v", err)
+	}
+
+	// Fetch driver details
+	var driverName string = "Assigned Driver"
+	var vehicleNo string = "N/A"
+	var driverPhone string = req.DriverContact
+	driver, err := h.loungeDriverRepo.GetDriverByID(req.DriverID)
+	if err == nil && driver != nil {
+		driverName = driver.Name
+		vehicleNo = driver.VehicleNumber
+		driverPhone = driver.ContactNumber
+	}
+
+	// Fetch booking details for pickup location name and primary guest phone
+	var pickupLocation string = "N/A"
+	var passengerPhone string = req.GuestContact
+	booking, err := h.bookingRepo.GetLoungeBookingByID(req.LoungeBookingID)
+	if err == nil && booking != nil {
+		if booking.PickupLocationName != "" {
+			pickupLocation = booking.PickupLocationName
+		}
+		if strings.TrimSpace(booking.PrimaryGuestPhone) != "" {
+			passengerPhone = booking.PrimaryGuestPhone
+		}
+	}
+
+	// Send driver assignment SMS including pickup location name
+	h.sendDriverAssignmentSMS(req.DriverContact, req.GuestName, req.GuestContact, pickupLocation)
+
+	// Send passenger/guest assignment SMS
+	h.sendPassengerAssignmentSMS(passengerPhone, driverName, vehicleNo, driverPhone)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":     "Driver assignment created successfully",
@@ -133,7 +173,7 @@ func (h *LoungeBookingDriverAssignmentHandler) CreateAssignment(c *gin.Context) 
 	})
 }
 
-func (h *LoungeBookingDriverAssignmentHandler) sendDriverAssignmentSMS(driverContact, guestName, guestContact string) {
+func (h *LoungeBookingDriverAssignmentHandler) sendDriverAssignmentSMS(driverContact, guestName, guestContact, pickupLocation string) {
 	if h.smsGateway == nil {
 		return
 	}
@@ -148,9 +188,13 @@ func (h *LoungeBookingDriverAssignmentHandler) sendDriverAssignmentSMS(driverCon
 		name = "Guest"
 	}
 
+	if pickupLocation == "" {
+		pickupLocation = "N/A"
+	}
+
 	contact := strings.TrimSpace(guestContact)
 	if contact == "" {
-		message := "Your vehicle is booked for: " + name + "."
+		message := "Your vehicle is booked for: " + name + ". Pickup Location: " + pickupLocation + "."
 		if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
 			log.Printf("WARN: Failed to send assignment SMS to %s: %v", phone, err)
 			return
@@ -160,7 +204,7 @@ func (h *LoungeBookingDriverAssignmentHandler) sendDriverAssignmentSMS(driverCon
 		return
 	}
 
-	message := "Your vehicle is booked for: " + name + ". Contact the passenger at " + contact + " and get directions."
+	message := "Your vehicle is booked for: " + name + ". Pickup Location: " + pickupLocation + ". Contact the passenger at " + contact + " and get directions."
 	if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
 		log.Printf("WARN: Failed to send assignment SMS to %s: %v", phone, err)
 		return
@@ -168,6 +212,26 @@ func (h *LoungeBookingDriverAssignmentHandler) sendDriverAssignmentSMS(driverCon
 
 	log.Printf("INFO: Assignment SMS sent to driver %s", phone)
 }
+
+func (h *LoungeBookingDriverAssignmentHandler) sendPassengerAssignmentSMS(passengerContact, driverName, vehicleNo, driverPhone string) {
+	if h.smsGateway == nil {
+		return
+	}
+
+	phone := strings.TrimSpace(passengerContact)
+	if phone == "" {
+		return
+	}
+
+	message := fmt.Sprintf("your booking for transportation is confirmed. Driver: %s, Vehicle: %s, Phone: %s", driverName, vehicleNo, driverPhone)
+	if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
+		log.Printf("WARN: Failed to send assignment SMS to passenger %s: %v", phone, err)
+		return
+	}
+
+	log.Printf("INFO: Assignment SMS sent to passenger %s", phone)
+}
+
 
 // GetAssignmentByID handles GET /api/v1/lounge-booking-driver-assignments/:id
 func (h *LoungeBookingDriverAssignmentHandler) GetAssignmentByID(c *gin.Context) {
@@ -467,11 +531,17 @@ func (h *LoungeBookingDriverAssignmentHandler) DeleteAssignment(c *gin.Context) 
 		return
 	}
 
+	// Update transport_bookings status to canceled
+	if err := h.assignmentRepo.UpdateTransportBookingStatus(assignment.LoungeBookingID, "canceled"); err != nil {
+		log.Printf("ERROR: Failed to update transport booking status to canceled: %v", err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "Assignment deleted successfully",
 		"assignment_id": assignmentID,
 	})
 }
+
 
 // CancelAssignment handles POST /api/v1/lounge-booking-driver-assignments/:id/cancel
 func (h *LoungeBookingDriverAssignmentHandler) CancelAssignment(c *gin.Context) {
@@ -532,7 +602,23 @@ func (h *LoungeBookingDriverAssignmentHandler) CancelAssignment(c *gin.Context) 
 		return
 	}
 
+	// Update transport_bookings status to canceled
+	if err := h.assignmentRepo.UpdateTransportBookingStatus(assignment.LoungeBookingID, "canceled"); err != nil {
+		log.Printf("ERROR: Failed to update transport booking status to canceled: %v", err)
+	}
+
+	// Fetch booking details for primary guest phone
+	var passengerPhone string = assignment.GuestContact
+	booking, err := h.bookingRepo.GetLoungeBookingByID(assignment.LoungeBookingID)
+	if err == nil && booking != nil && strings.TrimSpace(booking.PrimaryGuestPhone) != "" {
+		passengerPhone = booking.PrimaryGuestPhone
+	}
+
+	// Send cancellation SMS to driver
 	h.sendDriverCancellationSMS(assignment.DriverContact, assignment.GuestName)
+
+	// Send cancellation SMS to passenger
+	h.sendPassengerCancellationSMS(passengerPhone)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":       "Assignment cancelled successfully",
@@ -563,6 +649,26 @@ func (h *LoungeBookingDriverAssignmentHandler) sendDriverCancellationSMS(driverC
 
 	log.Printf("INFO: Cancellation SMS sent to driver %s", phone)
 }
+
+func (h *LoungeBookingDriverAssignmentHandler) sendPassengerCancellationSMS(passengerContact string) {
+	if h.smsGateway == nil {
+		return
+	}
+
+	phone := strings.TrimSpace(passengerContact)
+	if phone == "" {
+		return
+	}
+
+	message := "unfortunatly we had to cancel the transport booking but we will assign a driver quickly as possible thank you for your understanding."
+	if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
+		log.Printf("WARN: Failed to send cancellation SMS to passenger %s: %v", phone, err)
+		return
+	}
+
+	log.Printf("INFO: Cancellation SMS sent to passenger %s", phone)
+}
+
 
 // CheckDriverAssignment handles GET /api/v1/lounge-booking-driver-assignments/check/:booking_id
 // Checks if a driver is already assigned to a specific booking

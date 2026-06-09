@@ -506,9 +506,17 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 			lb.primary_guest_name, lb.primary_guest_phone, lb.promo_code, lb.special_requests,
 			lb.internal_notes, lb.cancelled_at, lb.cancellation_reason, lb.created_at, lb.updated_at,
 			lb.qr_code_data,
-			l.lounge_name, l.address
+			l.lounge_name, l.address,
+			EXISTS(
+				SELECT 1 FROM transport_bookings tb 
+				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+			) AS has_transport,
+			COALESCE(tb.vehicle_type, '') AS vehicle_type,
+			COALESCE(ltl.location, '') AS pickup_location_name
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
+		LEFT JOIN transport_bookings tb ON tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+		LEFT JOIN lounge_transport_locations ltl ON ltl.id = tb.pickup_location_id
 		WHERE lb.id = $1
 	`
 
@@ -523,6 +531,9 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 		&booking.InternalNotes, &booking.CancelledAt, &booking.CancellationReason, &booking.CreatedAt, &booking.UpdatedAt,
 		&booking.QRCodeData,
 		&booking.LoungeName, &booking.LoungeAddress,
+		&booking.HasTransport,
+		&booking.VehicleType,
+		&booking.PickupLocationName,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -597,7 +608,11 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserID(userID uuid.UUID, li
 		SELECT 
 			lb.id, lb.booking_reference, lb.lounge_id, l.lounge_name,
 			lb.booking_type, lb.scheduled_arrival, lb.number_of_guests, lb.primary_guest_name, lb.primary_guest_phone,
-			lb.total_amount, lb.status, lb.payment_status, lb.created_at
+			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
+			EXISTS(
+				SELECT 1 FROM transport_bookings tb 
+				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+			) AS has_transport
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.user_id = $1
@@ -615,7 +630,11 @@ func (r *LoungeBookingRepository) GetUpcomingLoungeBookingsByUserID(userID uuid.
 		SELECT 
 			lb.id, lb.booking_reference, lb.lounge_id, l.lounge_name,
 			lb.booking_type, lb.scheduled_arrival, lb.number_of_guests, lb.primary_guest_name, lb.primary_guest_phone,
-			lb.total_amount, lb.status, lb.payment_status, lb.created_at
+			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
+			EXISTS(
+				SELECT 1 FROM transport_bookings tb 
+				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+			) AS has_transport
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.user_id = $1 
@@ -634,7 +653,11 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserIDAndStatus(userID uuid
 		SELECT 
 			lb.id, lb.booking_reference, lb.lounge_id, l.lounge_name,
 			lb.booking_type, lb.scheduled_arrival, lb.number_of_guests, lb.primary_guest_name, lb.primary_guest_phone,
-			lb.total_amount, lb.status, lb.payment_status, lb.created_at
+			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
+			EXISTS(
+				SELECT 1 FROM transport_bookings tb 
+				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+			) AS has_transport
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.user_id = $1
@@ -653,7 +676,11 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByLoungeID(loungeID uuid.UUID
 		SELECT 
 			lb.id, lb.booking_reference, lb.lounge_id, l.lounge_name,
 			lb.booking_type, lb.scheduled_arrival, lb.number_of_guests, lb.primary_guest_name, lb.primary_guest_phone,
-			lb.total_amount, lb.status, lb.payment_status, lb.created_at
+			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
+			EXISTS(
+				SELECT 1 FROM transport_bookings tb 
+				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+			) AS has_transport
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.lounge_id = $1
@@ -713,7 +740,11 @@ func (r *LoungeBookingRepository) GetTodaysLoungeBookings(loungeID uuid.UUID) ([
 		SELECT 
 			lb.id, lb.booking_reference, lb.lounge_id, l.lounge_name,
 			lb.booking_type, lb.scheduled_arrival, lb.number_of_guests, lb.primary_guest_name, lb.primary_guest_phone,
-			lb.total_amount, lb.status, lb.payment_status, lb.created_at
+			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
+			EXISTS(
+				SELECT 1 FROM transport_bookings tb 
+				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+			) AS has_transport
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.lounge_id = $1 

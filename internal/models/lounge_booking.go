@@ -282,6 +282,9 @@ type LoungeBooking struct {
 	// Populated via JOINs (not in DB table itself)
 	Guests    []LoungeBookingGuest    `db:"-" json:"guests,omitempty"`
 	PreOrders []LoungeBookingPreOrder `db:"-" json:"pre_orders,omitempty"`
+	HasTransport bool                 `db:"has_transport" json:"has_transport"`
+	VehicleType  string               `db:"vehicle_type" json:"vehicle_type,omitempty"`
+	PickupLocationName string         `db:"pickup_location_name" json:"pickup_location_name,omitempty"`
 }
 
 // MarshalJSON customizes JSON encoding for LoungeBooking
@@ -590,6 +593,10 @@ type LoungeBookingListItem struct {
 	Status            LoungeBookingStatus `json:"status" db:"status"`
 	PaymentStatus     LoungePaymentStatus `json:"payment_status" db:"payment_status"`
 	CreatedAt         time.Time           `json:"created_at" db:"created_at"`
+	MasterBookingID   *uuid.UUID          `json:"master_booking_id,omitempty" db:"master_booking_id"`
+	HasTransport      bool                `json:"has_transport" db:"has_transport"`
+	VehicleType        string               `json:"vehicle_type,omitempty" db:"vehicle_type"`
+	PickupLocationName string               `json:"pickup_location_name,omitempty" db:"pickup_location_name"`
 }
 
 // LoungeBookingWithOrders combines booking summary and all in-lounge orders

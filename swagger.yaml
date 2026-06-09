@@ -10298,17 +10298,20 @@ paths:
         Requires lounge owner authentication.
 
 
-        **SMS Notification:**
+        **SMS Notifications:**
 
         - After successful assignment creation, the backend sends an SMS to the assigned
-        driver via the configured SMS gateway.
+        driver via the configured SMS gateway. Message includes passenger name, **pickup location name**, and passenger contact.
 
-        - Message includes passenger name and booking contact number, and asks the
-        driver to contact the passenger to get directions.
+        - The backend also sends a confirmation SMS to the passenger/guest (at the primary guest phone or guest contact):
+        "your booking for transportation is confirmed. Driver: {driver_name}, Vehicle: {vehicle_number}, Phone: {driver_phone}"
 
         - SMS dispatch is best-effort; assignment creation remains successful even
         if SMS delivery fails.
 
+        **Status Updates:**
+
+        - Automatically updates the related booking status in the `transport_bookings` table to `confirmed`.
         '
       operationId: createLoungeBookingDriverAssignment
       tags:
@@ -10429,6 +10432,8 @@ paths:
 
         Requires lounge owner authentication.
 
+        **Status Updates:**
+        - Automatically updates the related booking status in the `transport_bookings` table to `canceled`.
         '
       operationId: deleteLoungeBookingDriverAssignment
       tags:
@@ -10467,10 +10472,19 @@ paths:
   /api/v1/lounge-booking-driver-assignments/{id}/cancel:
     post:
       summary: Cancel driver assignment
-      description: 'Cancel a driver assignment and update its status to ''cancelled''.
+      description: 'Cancel a driver assignment.
 
         Requires lounge owner authentication.
 
+        **SMS Notifications:**
+
+        - Sends a cancellation SMS to the assigned driver.
+        - Sends a cancellation SMS to the passenger/guest:
+        "unfortunatly we had to cancel the transport booking but we will assign a driver quickly as possible thank you for your understanding."
+
+        **Status Updates:**
+
+        - Automatically updates the related booking status in the `transport_bookings` table to `canceled`.
         '
       operationId: cancelLoungeBookingDriverAssignment
       tags:
@@ -18313,6 +18327,21 @@ components:
         updated_at:
           type: string
           format: date-time
+        has_transport:
+          type: boolean
+          example: true
+          description: Whether the booking ordered transport services
+        vehicle_type:
+          type: string
+          nullable: true
+          example: tuktuk
+          description: The vehicle type booked (e.g. tuktuk, car, van)
+        pickup_location_name:
+          type: string
+          nullable: true
+          example: Main Lounge Entrance
+          description: Name of the transport pickup location
+
     LoungeBookingGuest:
       type: object
       description: Guest in a lounge booking
@@ -18400,6 +18429,26 @@ components:
         created_at:
           type: string
           format: date-time
+        master_booking_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional link to master booking
+        has_transport:
+          type: boolean
+          example: true
+          description: Whether the booking ordered transport services
+        vehicle_type:
+          type: string
+          nullable: true
+          example: tuktuk
+          description: The vehicle type booked
+        pickup_location_name:
+          type: string
+          nullable: true
+          example: Main Lounge Entrance
+          description: Name of the transport pickup location
+
     LoungeBookingDetail:
       type: object
       description: Detailed lounge booking with guests and pre-orders

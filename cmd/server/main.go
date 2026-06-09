@@ -308,6 +308,8 @@ func main() {
 		loungeBookingDriverAssignmentRepo,
 		loungeOwnerRepository,
 		loungeRepository,
+		loungeBookingRepo,
+		loungeDriverRepository,
 		smsGateway,
 	)
 	logger.Info("✓ Lounge booking driver assignment system initialized")

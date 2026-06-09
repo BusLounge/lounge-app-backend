@@ -185,3 +185,14 @@ func (r *LoungeBookingDriverAssignmentRepository) CheckIfDriverAssigned(bookingI
 	}
 	return &assignment, nil
 }
+
+// UpdateTransportBookingStatus updates the status of the related transport booking
+func (r *LoungeBookingDriverAssignmentRepository) UpdateTransportBookingStatus(loungeBookingID uuid.UUID, status string) error {
+	query := `
+		UPDATE transport_bookings 
+		SET status = $2 
+		WHERE booking_id = (SELECT master_booking_id FROM lounge_bookings WHERE id = $1)
+	`
+	_, err := r.db.Exec(query, loungeBookingID, status)
+	return err
+}
