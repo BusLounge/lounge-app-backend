@@ -4,8 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"time"
 	"strings"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/smarttransit/sms-auth-backend/internal/models"
@@ -95,8 +96,8 @@ func (r *LoungeDriverRepository) GetDriverByID(driverID uuid.UUID) (*models.Loun
 	// creating the driver struct to hold data
 	var driver models.LoungeDriver
 
-	query := 
-			 `SELECT *
+	query :=
+		`SELECT *
 			  FROM lounge_drivers
 			  WHERE id = $1`
 
@@ -118,7 +119,7 @@ func (r *LoungeDriverRepository) GetDriverByID(driverID uuid.UUID) (*models.Loun
 func (r *LoungeDriverRepository) DeleteDriver(driverID uuid.UUID) error {
 
 	query :=
-			`DELETE FROM lounge_drivers
+		`DELETE FROM lounge_drivers
 			 WHERE id=$1`
 
 	// executing the delete query
@@ -141,43 +142,42 @@ func (r *LoungeDriverRepository) DeleteDriver(driverID uuid.UUID) error {
 }
 
 // update drivers using driverID
-func (r *LoungeDriverRepository) UpdateDriver(driverID uuid.UUID, updates map[string]interface{}) error{
+func (r *LoungeDriverRepository) UpdateDriver(driverID uuid.UUID, updates map[string]interface{}) error {
 
 	// if no updates returning nil
 	if len(updates) == 0 {
-        return nil
-    }
+		return nil
+	}
 
 	// Build dynamic query
-    query := "UPDATE lounge_drivers SET "
+	query := "UPDATE lounge_drivers SET "
 	var args []interface{}
-    var placeholders []string
-    argIndex := 1
+	var placeholders []string
+	argIndex := 1
 
 	// iterating through the values to append the key , value pairs
 	for column, value := range updates {
-        placeholders = append(placeholders, fmt.Sprintf("%s = $%d", column, argIndex))
-        args = append(args, value)
-        argIndex++
-    }
+		placeholders = append(placeholders, fmt.Sprintf("%s = $%d", column, argIndex))
+		args = append(args, value)
+		argIndex++
+	}
 
 	query += strings.Join(placeholders, ", ")
-    query += fmt.Sprintf(", updated_at = NOW() WHERE id = $%d", argIndex)
-    args = append(args, driverID)
+	query += fmt.Sprintf(", updated_at = NOW() WHERE id = $%d", argIndex)
+	args = append(args, driverID)
 
 	// quarying the Database
 	result, err := r.db.Exec(query, args...)
-    if err != nil {
-        log.Printf("ERROR: Failed to update driver %s: %v", driverID, err)
-        return fmt.Errorf("failed to update driver: %w", err)
-    }
+	if err != nil {
+		log.Printf("ERROR: Failed to update driver %s: %v", driverID, err)
+		return fmt.Errorf("failed to update driver: %w", err)
+	}
 
 	rows, _ := result.RowsAffected()
-    if rows == 0 {
-        return fmt.Errorf("driver not found: %s", driverID)
-    }
+	if rows == 0 {
+		return fmt.Errorf("driver not found: %s", driverID)
+	}
 
-    return nil
-    
+	return nil
 
 }

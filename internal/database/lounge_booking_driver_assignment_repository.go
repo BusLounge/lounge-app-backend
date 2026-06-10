@@ -147,7 +147,7 @@ func (r *LoungeBookingDriverAssignmentRepository) UpdateAssignment(assignmentID 
 
 	setClauses = append(setClauses, fmt.Sprintf("updated_at = NOW()"))
 
-	query := fmt.Sprintf("UPDATE lounge_booking_driver_assignments SET %s WHERE id = $%d", 
+	query := fmt.Sprintf("UPDATE lounge_booking_driver_assignments SET %s WHERE id = $%d",
 		fmt.Sprintf("%v", setClauses), argIndex)
 	args = append(args, assignmentID)
 

@@ -168,8 +168,8 @@ func (h *LoungeBookingDriverAssignmentHandler) CreateAssignment(c *gin.Context) 
 	h.sendPassengerAssignmentSMS(passengerPhone, driverName, vehicleNo, driverPhone)
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":     "Driver assignment created successfully",
-		"assignment":  assignment,
+		"message":    "Driver assignment created successfully",
+		"assignment": assignment,
 	})
 }
 
@@ -231,7 +231,6 @@ func (h *LoungeBookingDriverAssignmentHandler) sendPassengerAssignmentSMS(passen
 
 	log.Printf("INFO: Assignment SMS sent to passenger %s", phone)
 }
-
 
 // GetAssignmentByID handles GET /api/v1/lounge-booking-driver-assignments/:id
 func (h *LoungeBookingDriverAssignmentHandler) GetAssignmentByID(c *gin.Context) {
@@ -542,7 +541,6 @@ func (h *LoungeBookingDriverAssignmentHandler) DeleteAssignment(c *gin.Context) 
 	})
 }
 
-
 // CancelAssignment handles POST /api/v1/lounge-booking-driver-assignments/:id/cancel
 func (h *LoungeBookingDriverAssignmentHandler) CancelAssignment(c *gin.Context) {
 	userCtx, exists := middleware.GetUserContext(c)
@@ -669,7 +667,6 @@ func (h *LoungeBookingDriverAssignmentHandler) sendPassengerCancellationSMS(pass
 	log.Printf("INFO: Cancellation SMS sent to passenger %s", phone)
 }
 
-
 // CheckDriverAssignment handles GET /api/v1/lounge-booking-driver-assignments/check/:booking_id
 // Checks if a driver is already assigned to a specific booking
 func (h *LoungeBookingDriverAssignmentHandler) CheckDriverAssignment(c *gin.Context) {
@@ -700,31 +697,31 @@ func (h *LoungeBookingDriverAssignmentHandler) getAssignedDriverByBooking(c *gin
 	if err != nil {
 		// No assignment found or other error - treat as not assigned
 		c.JSON(http.StatusOK, gin.H{
-			"assigned":   false,
-			"assignment": nil,
-			"assignment_id":     nil,
+			"assigned":           false,
+			"assignment":         nil,
+			"assignment_id":      nil,
 			"assigned_driver_id": nil,
-			"booking_id":        bookingID,
+			"booking_id":         bookingID,
 		})
 		return
 	}
 
 	if assignment == nil {
 		c.JSON(http.StatusOK, gin.H{
-			"assigned":   false,
-			"assignment": nil,
-			"assignment_id":     nil,
+			"assigned":           false,
+			"assignment":         nil,
+			"assignment_id":      nil,
 			"assigned_driver_id": nil,
-			"booking_id":        bookingID,
+			"booking_id":         bookingID,
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"assigned":          true,
-		"assignment_id":     assignment.ID,
+		"assigned":           true,
+		"assignment_id":      assignment.ID,
 		"assigned_driver_id": assignment.DriverID,
-		"booking_id":        assignment.LoungeBookingID,
-		"assignment":        assignment,
+		"booking_id":         assignment.LoungeBookingID,
+		"assignment":         assignment,
 	})
 }

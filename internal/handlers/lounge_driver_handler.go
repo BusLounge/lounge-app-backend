@@ -40,18 +40,18 @@ type AddDriverRequest struct {
 	VehicleNumber string                   `json:"vehicle_no" binding:"required"`
 	VehicleType   models.DriverVehicleType `json:"vehicle_type" binding:"required,oneof=three_wheeler car van"`
 	// NEWLY ADDED LoungeID (ID is coming from the frontend the owner will select it so no parsing of loungeID in request)
-	LoungeID      uuid.UUID                `json:"lounge_id" binding:"required"`
+	LoungeID uuid.UUID `json:"lounge_id" binding:"required"`
 }
 
 // update drivers in the lounge
-type UpdateDriverRequest struct{
+type UpdateDriverRequest struct {
 	// getting user data to the struct by using binding for safety(for update purposes)
-	Name          *string                 `json:"name" binding:"omitempty,min=2,max=100"`
-    NIC           *string                 `json:"nic_number" binding:"omitempty"`
-    ContactNumber *string                 `json:"contact_no" binding:"omitempty"`
-    VehicleNumber *string                 `json:"vehicle_no" binding:"omitempty"`
-    VehicleType   *models.DriverVehicleType `json:"vehicle_type" binding:"omitempty,oneof=three_wheeler car van"`
-    Status        *models.DriverStatus      `json:"status" binding:"omitempty,oneof=active inactive"`
+	Name          *string                   `json:"name" binding:"omitempty,min=2,max=100"`
+	NIC           *string                   `json:"nic_number" binding:"omitempty"`
+	ContactNumber *string                   `json:"contact_no" binding:"omitempty"`
+	VehicleNumber *string                   `json:"vehicle_no" binding:"omitempty"`
+	VehicleType   *models.DriverVehicleType `json:"vehicle_type" binding:"omitempty,oneof=three_wheeler car van"`
+	Status        *models.DriverStatus      `json:"status" binding:"omitempty,oneof=active inactive"`
 }
 
 // adding drivers to the lounge
@@ -309,9 +309,9 @@ func (h *LoungeDriverHandler) DeleteDriver(c *gin.Context) {
 	}
 
 	// extracting the driver by driverID
-	driverData,err := h.loungeDriverRepo.GetDriverByID(driverID)
-    if err != nil {
-		log.Printf("ERROR: Failed to get driver %s: %v",driverID, err)
+	driverData, err := h.loungeDriverRepo.GetDriverByID(driverID)
+	if err != nil {
+		log.Printf("ERROR: Failed to get driver %s: %v", driverID, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "database_error",
 			Message: "Failed to get driver",
@@ -319,7 +319,7 @@ func (h *LoungeDriverHandler) DeleteDriver(c *gin.Context) {
 		return
 	}
 	if driverData == nil {
-		log.Printf("ERROR: No driver found %s:",driverID)
+		log.Printf("ERROR: No driver found %s:", driverID)
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "not_found",
 			Message: "driver not found",
@@ -329,14 +329,13 @@ func (h *LoungeDriverHandler) DeleteDriver(c *gin.Context) {
 
 	//verifying if the driver actually belongs to the lounge
 	if driverData.LoungeID != loungeID {
-		log.Printf("ERROR:Driver does not belong to this lounge %s:",loungeID)
+		log.Printf("ERROR:Driver does not belong to this lounge %s:", loungeID)
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Error:   "forbidden",
 			Message: "Driver does not belong to this lounge",
 		})
 		return
 	}
-
 
 	// removing drivers by id
 	delErr := h.loungeDriverRepo.DeleteDriver(driverID)
@@ -354,9 +353,8 @@ func (h *LoungeDriverHandler) DeleteDriver(c *gin.Context) {
 
 }
 
-
-// This handles all the HTTP requests related to updating drivers in a certain lounge 
-func (h *LoungeDriverHandler) UpdateDriver(c *gin.Context){
+// This handles all the HTTP requests related to updating drivers in a certain lounge
+func (h *LoungeDriverHandler) UpdateDriver(c *gin.Context) {
 
 	// validating the user who is sending the request
 	userCtx, exists := middleware.GetUserContext(c)
@@ -417,9 +415,9 @@ func (h *LoungeDriverHandler) UpdateDriver(c *gin.Context){
 	}
 
 	// extracting the driver by driverID
-	driverData,err := h.loungeDriverRepo.GetDriverByID(driverID)
-    if err != nil {
-		log.Printf("ERROR: Failed to get driver %s: %v",driverID, err)
+	driverData, err := h.loungeDriverRepo.GetDriverByID(driverID)
+	if err != nil {
+		log.Printf("ERROR: Failed to get driver %s: %v", driverID, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "database_error",
 			Message: "Failed to get driver",
@@ -427,7 +425,7 @@ func (h *LoungeDriverHandler) UpdateDriver(c *gin.Context){
 		return
 	}
 	if driverData == nil {
-		log.Printf("ERROR: No driver found %s: ",driverID)
+		log.Printf("ERROR: No driver found %s: ", driverID)
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "not_found",
 			Message: "driver not found",
@@ -437,7 +435,7 @@ func (h *LoungeDriverHandler) UpdateDriver(c *gin.Context){
 
 	//verifying if the driver actually belongs to the lounge
 	if driverData.LoungeID != loungeID {
-		log.Printf("ERROR:Driver does not belong to this lounge %s:",loungeID)
+		log.Printf("ERROR:Driver does not belong to this lounge %s:", loungeID)
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Error:   "forbidden",
 			Message: "Driver does not belong to this lounge",
@@ -445,19 +443,18 @@ func (h *LoungeDriverHandler) UpdateDriver(c *gin.Context){
 		return
 	}
 
-
-	// creating a UpdateRequest Struct for driver 
+	// creating a UpdateRequest Struct for driver
 	var req UpdateDriverRequest
-	if err := c.ShouldBindJSON(&req); err!=nil{
-		c.JSON(http.StatusBadRequest,ErrorResponse{
-			Error: "validation_failed",
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_failed",
 			Message: err.Error(),
 		})
 		return
 	}
 
 	// creating a map to convert data into the required format
-	updates :=make(map[string]interface{})
+	updates := make(map[string]interface{})
 
 	// storing only the values that are changed
 	if req.Name != nil {
@@ -467,31 +464,30 @@ func (h *LoungeDriverHandler) UpdateDriver(c *gin.Context){
 		updates["nic"] = *req.NIC
 	}
 	if req.ContactNumber != nil {
-        updates["contact_no"] = *req.ContactNumber
-    }
-    if req.VehicleNumber != nil {
-        updates["vehicle_no"] = *req.VehicleNumber
-    }
-    if req.VehicleType != nil {
-        updates["vehicle_type"] = *req.VehicleType
-    }
-    if req.Status != nil {
-        updates["status"] = *req.Status
-    }
+		updates["contact_no"] = *req.ContactNumber
+	}
+	if req.VehicleNumber != nil {
+		updates["vehicle_no"] = *req.VehicleNumber
+	}
+	if req.VehicleType != nil {
+		updates["vehicle_type"] = *req.VehicleType
+	}
+	if req.Status != nil {
+		updates["status"] = *req.Status
+	}
 
 	// update the driver
-	if err := h.loungeDriverRepo.UpdateDriver(driverID,updates); err != nil {
+	if err := h.loungeDriverRepo.UpdateDriver(driverID, updates); err != nil {
 		// if error occured returning the server error
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
-            Error:   "update_failed",
-            Message: "Failed to update driver",
-        })
-        return
+			Error:   "update_failed",
+			Message: "Failed to update driver",
+		})
+		return
 	}
 
 	// returning the updated driver
 	updatedDriver, _ := h.loungeDriverRepo.GetDriverByID(driverID)
-    c.JSON(http.StatusOK, updatedDriver)
-
+	c.JSON(http.StatusOK, updatedDriver)
 
 }
