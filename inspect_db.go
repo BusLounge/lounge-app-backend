@@ -16,17 +16,17 @@ func main() {
 	defer db.Close()
 
 	rows, err := db.Query(`
-		SELECT enumlabel, 'enum', 'NO', 'NULL'
-		FROM pg_enum 
-		JOIN pg_type ON pg_enum.enumtypid = pg_type.oid 
-		WHERE pg_type.typname = 'transport_types'
+		SELECT conname, pg_get_constraintdef(con.oid), 'NO', 'NULL'
+		FROM pg_constraint con
+		JOIN pg_class rel ON rel.oid = con.conrelid
+		WHERE rel.relname = 'lounge_special_packages'
 	`)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer rows.Close()
 
-	fmt.Println("Values in transport_types enum:")
+	fmt.Println("Constraints in lounge_special_packages:")
 	for rows.Next() {
 		var colName, dataType, isNullable string
 		var colDefault sql.NullString
