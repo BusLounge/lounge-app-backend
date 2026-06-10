@@ -16,17 +16,17 @@ func main() {
 	defer db.Close()
 
 	rows, err := db.Query(`
-		SELECT conname, pg_get_constraintdef(con.oid), 'NO', 'NULL'
-		FROM pg_constraint con
-		JOIN pg_class rel ON rel.oid = con.conrelid
-		WHERE rel.relname = 'lounge_special_packages'
+		SELECT column_name, data_type, is_nullable, column_default 
+		FROM information_schema.columns 
+		WHERE table_name = 'lounge_booking_driver_assignments'
+		ORDER BY column_name
 	`)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer rows.Close()
 
-	fmt.Println("Constraints in lounge_special_packages:")
+	fmt.Println("Columns in lounge_booking_driver_assignments:")
 	for rows.Next() {
 		var colName, dataType, isNullable string
 		var colDefault sql.NullString

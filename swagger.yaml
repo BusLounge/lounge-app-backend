@@ -8162,20 +8162,35 @@ paths:
                     example: Booking not found
         '500':
           $ref: '#/components/responses/InternalServerError'
-  /api/v1/lounges/{lounge_id}/drivers:
+  /api/v1/lounges/{id}/drivers:
     get:
       summary: Get all drivers for a lounge
-      description: Get all drivers assigned to a specific lounge
-      operationId: getDriversByLounge_2
+      description: |-
+        Get all drivers assigned to a specific lounge. Optionally filter by booking_id
+        to exclude drivers that are currently busy (have an active pending/assigned/accepted
+        assignment on a **different** booking). Drivers assigned to the specified booking
+        are always included in the result even if they have an active assignment.
+      operationId: getDriversByLounge
       tags:
       - Lounge Owner
       security:
       - BearerAuth: []
       parameters:
-      - name: lounge_id
+      - name: id
         in: path
         required: true
         description: Lounge UUID
+        schema:
+          type: string
+          format: uuid
+      - name: booking_id
+        in: query
+        required: false
+        description: |-
+          Optional lounge booking UUID. When provided, drivers who already have an
+          active assignment on a different booking (status: pending, assigned, or
+          accepted) are excluded from the response. Drivers assigned to THIS booking
+          are always shown regardless of their assignment status.
         schema:
           type: string
           format: uuid
@@ -9086,18 +9101,20 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
-  /api/v1/lounges/{lounge_id}/special-packages:
+  /api/v1/lounges/{id}/special-packages:
     get:
       summary: Get special packages for a lounge
+      description: Returns all active special packages for a given lounge, ordered platinum → gold → standard.
       operationId: getSpecialPackages
       tags:
       - Lounge Special Packages
       security:
       - BearerAuth: []
       parameters:
-      - name: lounge_id
+      - name: id
         in: path
         required: true
+        description: Lounge UUID
         schema:
           type: string
           format: uuid
@@ -9113,6 +9130,9 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/LoungeSpecialPackage'
+                  lounge_id:
+                    type: string
+                    format: uuid
                   total:
                     type: integer
         '400':
@@ -9127,15 +9147,21 @@ paths:
           $ref: '#/components/responses/InternalServerError'
     post:
       summary: Create a special package for a lounge
+      description: |-
+        Creates a new special package for a lounge. Requires the lounge owner to be
+        approved. The `package_type` must be one of `platinum`, `gold`, or `standard`.
+        If `transport_status` is `true` then `transport_mode` must also be provided
+        and must be one of `three-wheeler`, `van`, or `car`.
       operationId: createSpecialPackage
       tags:
       - Lounge Special Packages
       security:
       - BearerAuth: []
       parameters:
-      - name: lounge_id
+      - name: id
         in: path
         required: true
+        description: Lounge UUID
         schema:
           type: string
           format: uuid
@@ -9151,7 +9177,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoungeSpecialPackage'
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Special package created successfully
+                  special_package:
+                    $ref: '#/components/schemas/LoungeSpecialPackage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -9162,24 +9194,30 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
-  /api/v1/lounges/{lounge_id}/special-packages/{package_id}:
+  /api/v1/lounges/{id}/special-packages/{package_id}:
     put:
       summary: Update a special package for a lounge
+      description: |-
+        Updates an existing special package. Only the lounge owner can update packages.
+        All fields are optional — only fields provided in the request body are updated.
+        If `transport_status` is `true` then `transport_mode` must be provided and valid.
       operationId: updateSpecialPackage
       tags:
       - Lounge Special Packages
       security:
       - BearerAuth: []
       parameters:
-      - name: lounge_id
+      - name: id
         in: path
         required: true
+        description: Lounge UUID
         schema:
           type: string
           format: uuid
       - name: package_id
         in: path
         required: true
+        description: Special package UUID
         schema:
           type: string
           format: uuid
@@ -9195,7 +9233,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoungeSpecialPackage'
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Special package updated successfully
+                  special_package:
+                    $ref: '#/components/schemas/LoungeSpecialPackage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -9207,22 +9251,28 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
     delete:
-      summary: Delete a special package from a lounge
+      summary: Delete (soft-delete) a special package from a lounge
+      description: |-
+        Soft-deletes the special package by setting `is_active = false`.
+        The record is preserved in the database for historical purposes.
+        Only the lounge owner can delete packages.
       operationId: deleteSpecialPackage
       tags:
       - Lounge Special Packages
       security:
       - BearerAuth: []
       parameters:
-      - name: lounge_id
+      - name: id
         in: path
         required: true
+        description: Lounge UUID
         schema:
           type: string
           format: uuid
       - name: package_id
         in: path
         required: true
+        description: Special package UUID
         schema:
           type: string
           format: uuid
@@ -10472,20 +10522,23 @@ paths:
   /api/v1/lounge-booking-driver-assignments/{id}/cancel:
     post:
       summary: Cancel driver assignment
-      description: 'Cancel a driver assignment.
+      description: |-
+        Cancel a driver assignment. Updates the assignment status to `completed` in the
+        database (status update rather than delete, to preserve historical records).
 
         Requires lounge owner authentication.
 
         **SMS Notifications:**
-
         - Sends a cancellation SMS to the assigned driver.
         - Sends a cancellation SMS to the passenger/guest:
-        "unfortunatly we had to cancel the transport booking but we will assign a driver quickly as possible thank you for your understanding."
+          "unfortunately we had to cancel the transport booking but we will assign a driver quickly as possible thank you for your understanding."
 
         **Status Updates:**
-
+        - Updates the assignment status to `completed` in `lounge_booking_driver_assignments`.
         - Automatically updates the related booking status in the `transport_bookings` table to `canceled`.
-        '
+
+        **Driver Availability:**
+        - After cancellation the driver becomes available again for new bookings.
       operationId: cancelLoungeBookingDriverAssignment
       tags:
       - Lounge Driver Assignments
@@ -10495,6 +10548,7 @@ paths:
       - name: id
         in: path
         required: true
+        description: Driver assignment UUID
         schema:
           type: string
           format: uuid
@@ -10509,6 +10563,56 @@ paths:
                   message:
                     type: string
                     example: Assignment cancelled successfully
+                  assignment_id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounge-booking-driver-assignments/{id}/complete:
+    post:
+      summary: Complete driver assignment
+      description: |-
+        Mark a driver assignment as completed. Updates the assignment status to `completed`
+        in the database, preserving the historical record.
+
+        Requires lounge owner authentication.
+
+        **Status Updates:**
+        - Updates the assignment status to `completed` in `lounge_booking_driver_assignments`.
+        - Automatically updates the related booking status in the `transport_bookings` table to `completed`.
+
+        **Driver Availability:**
+        - After completion the driver becomes available again for new bookings.
+      operationId: completeLoungeBookingDriverAssignment
+      tags:
+      - Lounge Driver Assignments
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Driver assignment UUID
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Assignment completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Assignment completed successfully
                   assignment_id:
                     type: string
                     format: uuid

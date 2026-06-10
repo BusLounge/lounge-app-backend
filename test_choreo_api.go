@@ -45,7 +45,7 @@ func main() {
 		log.Fatalf("Error signing token: %v", err)
 	}
 
-	url := "https://6ed89a53-55ef-45f1-a497-e383bfedea00-dev.e1-us-east-azure.choreoapis.dev/default/backendloungeowner/v1.0/api/v1/lounges/e528941b-3c29-4b4e-87e8-6c2ae4ea8c34/special-packages"
+	url := "http://localhost:8080/api/v1/lounges/e528941b-3c29-4b4e-87e8-6c2ae4ea8c34/special-packages"
 	jsonBody := []byte(`{
 		"package_name": "Premium Lounge Package",
 		"package_type": "platinum",
@@ -80,6 +80,6 @@ func main() {
 		log.Fatalf("Error reading response body: %v", err)
 	}
 
-	fmt.Printf("Choreo Response Status: %d\n", resp.StatusCode)
-	fmt.Printf("Choreo Response Body: %s\n", string(body))
+	fmt.Printf("Local Response Status: %d\n", resp.StatusCode)
+	fmt.Printf("Local Response Body: %s\n", string(body))
 }
