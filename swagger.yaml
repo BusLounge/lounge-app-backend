@@ -5070,12 +5070,14 @@ paths:
   /api/v1/uploads/lounge-special-packages/{lounge_id}/image:
     post:
       summary: Upload a lounge special package image
-      description: 'Upload a special package image to Cloudinary and return the public secure
-        URL.
+      description: |-
+        Upload a special package image to Cloudinary and return the public secure URL.
 
         The returned URL should be stored in `image_url` on the package.
 
-        '
+        Send as `multipart/form-data` with the file in the `image` field.
+        An optional `lounge_id` text field may also be included (sent by the
+        Flutter client for grouping assets in Cloudinary).
       operationId: uploadSpecialPackageImage
       tags:
       - Uploads
@@ -5087,7 +5089,8 @@ paths:
         required: true
         schema:
           type: string
-        description: Lounge ID used to group uploaded assets in Cloudinary
+          format: uuid
+        description: Lounge UUID — used to group uploaded assets in Cloudinary
       requestBody:
         required: true
         content:
@@ -5101,6 +5104,10 @@ paths:
                   type: string
                   format: binary
                   description: Special package image file to upload
+                lounge_id:
+                  type: string
+                  description: Optional lounge ID forwarded by the client (already in path)
+              additionalProperties: true
       responses:
         '200':
           description: Special package image uploaded successfully
@@ -17892,6 +17899,7 @@ components:
       - package_type
       - description
       - price
+      additionalProperties: true
       properties:
         package_name:
           type: string
