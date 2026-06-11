@@ -10530,8 +10530,7 @@ paths:
     post:
       summary: Cancel driver assignment
       description: |-
-        Cancel a driver assignment. Updates the assignment status to `completed` in the
-        database (status update rather than delete, to preserve historical records).
+        Cancel a driver assignment. Updates the status of the assignment to 'cancelled'.
 
         Requires lounge owner authentication.
 
@@ -10541,7 +10540,7 @@ paths:
           "unfortunately we had to cancel the transport booking but we will assign a driver quickly as possible thank you for your understanding."
 
         **Status Updates:**
-        - Updates the assignment status to `completed` in `lounge_booking_driver_assignments`.
+        - Updates the assignment status to 'cancelled' in `lounge_booking_driver_assignments`.
         - Automatically updates the related booking status in the `transport_bookings` table to `canceled`.
 
         **Driver Availability:**
@@ -10585,13 +10584,18 @@ paths:
     post:
       summary: Complete driver assignment
       description: |-
-        Mark a driver assignment as completed. Updates the assignment status to `completed`
-        in the database, preserving the historical record.
+        Mark a driver assignment as completed. Updates the status of the assignment to 'completed'.
 
         Requires lounge owner authentication.
 
+        **SMS Notifications:**
+        - Sends a completion SMS to the assigned driver:
+          "the trip is completed successfully have a nice day!"
+        - Sends a completion SMS to the passenger/guest:
+          "the trip is completed successfully have a nice day!"
+
         **Status Updates:**
-        - Updates the assignment status to `completed` in `lounge_booking_driver_assignments`.
+        - Updates the assignment status to 'completed' in `lounge_booking_driver_assignments`.
         - Automatically updates the related booking status in the `transport_bookings` table to `completed`.
 
         **Driver Availability:**
@@ -10637,7 +10641,7 @@ paths:
       description: 'Check whether a driver is already assigned to a specific lounge
         booking.
 
-        Returns the assignment details if a driver is assigned, otherwise returns
+        Returns active (non-completed and non-cancelled) assignment details if a driver is assigned, otherwise returns
         null.
 
         This is a public endpoint and does not require authentication.
@@ -14734,6 +14738,25 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  assigned:
+                    type: boolean
+                    example: true
+                  assignment_id:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  assigned_driver_id:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  booking_id:
+                    type: string
+                    format: uuid
+                  assignment:
+                    allOf:
+                    - $ref: '#/components/schemas/LoungeBookingDriverAssignment'
+                    nullable: true
 components:
   securitySchemes:
     BearerAuth:
@@ -18453,6 +18476,10 @@ components:
           nullable: true
           example: Main Lounge Entrance
           description: Name of the transport pickup location
+        driver_assignment_status:
+          type: string
+          example: completed
+          description: The status of the driver assignment (pending, assigned, completed, cancelled)
 
     LoungeBookingGuest:
       type: object
@@ -18560,6 +18587,10 @@ components:
           nullable: true
           example: Main Lounge Entrance
           description: Name of the transport pickup location
+        driver_assignment_status:
+          type: string
+          example: completed
+          description: The status of the driver assignment (pending, assigned, completed, cancelled)
 
     LoungeBookingDetail:
       type: object

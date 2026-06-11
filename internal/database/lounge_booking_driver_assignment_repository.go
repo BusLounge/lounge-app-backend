@@ -164,7 +164,14 @@ func (r *LoungeBookingDriverAssignmentRepository) DeleteAssignment(assignmentID 
 
 // CancelAssignment cancels an assignment by ID
 func (r *LoungeBookingDriverAssignmentRepository) CancelAssignment(assignmentID uuid.UUID) error {
-	query := `DELETE FROM lounge_booking_driver_assignments WHERE id = $1`
+	query := `UPDATE lounge_booking_driver_assignments SET status = 'cancelled', updated_at = NOW() WHERE id = $1`
+	_, err := r.db.Exec(query, assignmentID)
+	return err
+}
+
+// CompleteAssignment completes an assignment by ID
+func (r *LoungeBookingDriverAssignmentRepository) CompleteAssignment(assignmentID uuid.UUID) error {
+	query := `UPDATE lounge_booking_driver_assignments SET status = 'completed', updated_at = NOW() WHERE id = $1`
 	_, err := r.db.Exec(query, assignmentID)
 	return err
 }

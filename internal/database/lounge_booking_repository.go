@@ -512,7 +512,13 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
 			) AS has_transport,
 			COALESCE(tb.vehicle_type, '') AS vehicle_type,
-			COALESCE(ltl.location, '') AS pickup_location_name
+			COALESCE(ltl.location, '') AS pickup_location_name,
+			COALESCE(
+				(SELECT status FROM lounge_booking_driver_assignments lbda 
+				 WHERE lbda.lounge_booking_id = lb.id 
+				 ORDER BY lbda.created_at DESC LIMIT 1),
+				''
+			) AS driver_assignment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		LEFT JOIN transport_bookings tb ON tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
@@ -534,6 +540,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 		&booking.HasTransport,
 		&booking.VehicleType,
 		&booking.PickupLocationName,
+		&booking.DriverAssignmentStatus,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -612,7 +619,13 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserID(userID uuid.UUID, li
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
 				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
-			) AS has_transport
+			) AS has_transport,
+			COALESCE(
+				(SELECT status FROM lounge_booking_driver_assignments lbda 
+				 WHERE lbda.lounge_booking_id = lb.id 
+				 ORDER BY lbda.created_at DESC LIMIT 1),
+				''
+			) AS driver_assignment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.user_id = $1
@@ -634,7 +647,13 @@ func (r *LoungeBookingRepository) GetUpcomingLoungeBookingsByUserID(userID uuid.
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
 				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
-			) AS has_transport
+			) AS has_transport,
+			COALESCE(
+				(SELECT status FROM lounge_booking_driver_assignments lbda 
+				 WHERE lbda.lounge_booking_id = lb.id 
+				 ORDER BY lbda.created_at DESC LIMIT 1),
+				''
+			) AS driver_assignment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.user_id = $1 
@@ -657,7 +676,13 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserIDAndStatus(userID uuid
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
 				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
-			) AS has_transport
+			) AS has_transport,
+			COALESCE(
+				(SELECT status FROM lounge_booking_driver_assignments lbda 
+				 WHERE lbda.lounge_booking_id = lb.id 
+				 ORDER BY lbda.created_at DESC LIMIT 1),
+				''
+			) AS driver_assignment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.user_id = $1
@@ -680,7 +705,13 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByLoungeID(loungeID uuid.UUID
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
 				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
-			) AS has_transport
+			) AS has_transport,
+			COALESCE(
+				(SELECT status FROM lounge_booking_driver_assignments lbda 
+				 WHERE lbda.lounge_booking_id = lb.id 
+				 ORDER BY lbda.created_at DESC LIMIT 1),
+				''
+			) AS driver_assignment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.lounge_id = $1
@@ -744,7 +775,13 @@ func (r *LoungeBookingRepository) GetTodaysLoungeBookings(loungeID uuid.UUID) ([
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
 				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
-			) AS has_transport
+			) AS has_transport,
+			COALESCE(
+				(SELECT status FROM lounge_booking_driver_assignments lbda 
+				 WHERE lbda.lounge_booking_id = lb.id 
+				 ORDER BY lbda.created_at DESC LIMIT 1),
+				''
+			) AS driver_assignment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		WHERE lb.lounge_id = $1 

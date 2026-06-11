@@ -926,6 +926,8 @@ func main() {
 			driverAssignments.DELETE("/:id", loungeBookingDriverAssignmentHandler.DeleteAssignment)
 			logger.Info("  ✅ POST /api/v1/lounge-booking-driver-assignments/:id/cancel - Cancel assignment")
 			driverAssignments.POST("/:id/cancel", loungeBookingDriverAssignmentHandler.CancelAssignment)
+			logger.Info("  ✅ POST /api/v1/lounge-booking-driver-assignments/:id/complete - Complete assignment")
+			driverAssignments.POST("/:id/complete", loungeBookingDriverAssignmentHandler.CompleteAssignment)
 		}
 
 		// Assignments by booking
@@ -933,6 +935,8 @@ func main() {
 		v1.GET("/lounge-bookings/:id/driver-assignments", loungeBookingDriverAssignmentHandler.GetAssignmentsByBooking)
 		logger.Info("  ✅ GET /api/v1/lounge-bookings/:id/assigned-driver - Get active assigned driver for booking")
 		v1.GET("/lounge-bookings/:id/assigned-driver", loungeBookingDriverAssignmentHandler.GetAssignedDriverByBooking)
+		logger.Info("  ✅ GET /api/v1/lounge-booking-driver-assignments/check/:booking_id - Check driver assignment")
+		v1.GET("/lounge-booking-driver-assignments/check/:booking_id", loungeBookingDriverAssignmentHandler.CheckDriverAssignment)
 
 		// Assignments by driver
 		logger.Info("  ✅ GET /api/v1/drivers/:driver_id/assignments - Get assignments for driver")
@@ -1270,8 +1274,8 @@ func main() {
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Server.Port),
 		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

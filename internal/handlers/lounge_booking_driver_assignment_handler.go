@@ -725,3 +725,125 @@ func (h *LoungeBookingDriverAssignmentHandler) getAssignedDriverByBooking(c *gin
 		"assignment":         assignment,
 	})
 }
+
+// CompleteAssignment handles POST /api/v1/lounge-booking-driver-assignments/:id/complete
+func (h *LoungeBookingDriverAssignmentHandler) CompleteAssignment(c *gin.Context) {
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error:   "unauthorized",
+			Message: "User context not found",
+		})
+		return
+	}
+
+	assignmentIDStr := c.Param("id")
+	assignmentID, err := uuid.Parse(assignmentIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_id",
+			Message: "Invalid assignment ID format",
+		})
+		return
+	}
+
+	// Get the assignment
+	assignment, err := h.assignmentRepo.GetAssignmentByID(assignmentID)
+	if err != nil || assignment == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Error:   "not_found",
+			Message: "Assignment not found",
+		})
+		return
+	}
+
+	// Verify lounge ownership
+	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	if err != nil || owner == nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Error:   "forbidden",
+			Message: "Not a lounge owner",
+		})
+		return
+	}
+
+	lounge, err := h.loungeRepo.GetLoungeByID(assignment.LoungeID)
+	if err != nil || lounge == nil || lounge.LoungeOwnerID != owner.ID {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Error:   "forbidden",
+			Message: "You don't own this lounge",
+		})
+		return
+	}
+
+	if err := h.assignmentRepo.CompleteAssignment(assignmentID); err != nil {
+		log.Printf("ERROR: Failed to complete assignment: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to complete assignment",
+		})
+		return
+	}
+
+	// Update transport_bookings status to completed
+	if err := h.assignmentRepo.UpdateTransportBookingStatus(assignment.LoungeBookingID, "completed"); err != nil {
+		log.Printf("ERROR: Failed to update transport booking status to completed: %v", err)
+	}
+
+	// Fetch booking details for primary guest phone
+	var passengerPhone string = assignment.GuestContact
+	booking, err := h.bookingRepo.GetLoungeBookingByID(assignment.LoungeBookingID)
+	if err == nil && booking != nil && strings.TrimSpace(booking.PrimaryGuestPhone) != "" {
+		passengerPhone = booking.PrimaryGuestPhone
+	}
+
+	// Send completion SMS to driver
+	h.sendDriverCompletionSMS(assignment.DriverContact)
+
+	// Send completion SMS to passenger
+	h.sendPassengerCompletionSMS(passengerPhone)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "Assignment completed successfully",
+		"assignment_id": assignmentID,
+	})
+}
+
+func (h *LoungeBookingDriverAssignmentHandler) sendDriverCompletionSMS(driverContact string) {
+	if h.smsGateway == nil {
+		return
+	}
+
+	phone := strings.TrimSpace(driverContact)
+	if phone == "" {
+		return
+	}
+
+	message := "the trip is completed successfully have a nice day!"
+	if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
+		log.Printf("WARN: Failed to send completion SMS to driver %s: %v", phone, err)
+		return
+	}
+
+	log.Printf("INFO: Completion SMS sent to driver %s", phone)
+}
+
+func (h *LoungeBookingDriverAssignmentHandler) sendPassengerCompletionSMS(passengerContact string) {
+	if h.smsGateway == nil {
+		return
+	}
+
+	phone := strings.TrimSpace(passengerContact)
+	if phone == "" {
+		return
+	}
+
+	message := "the trip is completed successfully have a nice day!"
+	if _, err := h.smsGateway.SendMessage(phone, message); err != nil {
+		log.Printf("WARN: Failed to send completion SMS to passenger %s: %v", phone, err)
+		return
+	}
+
+	log.Printf("INFO: Completion SMS sent to passenger %s", phone)
+}
+

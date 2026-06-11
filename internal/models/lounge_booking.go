@@ -285,6 +285,7 @@ type LoungeBooking struct {
 	HasTransport bool                 `db:"has_transport" json:"has_transport"`
 	VehicleType  string               `db:"vehicle_type" json:"vehicle_type,omitempty"`
 	PickupLocationName string         `db:"pickup_location_name" json:"pickup_location_name,omitempty"`
+	DriverAssignmentStatus string     `db:"driver_assignment_status" json:"driver_assignment_status,omitempty"`
 }
 
 // MarshalJSON customizes JSON encoding for LoungeBooking
@@ -597,6 +598,7 @@ type LoungeBookingListItem struct {
 	HasTransport      bool                `json:"has_transport" db:"has_transport"`
 	VehicleType        string               `json:"vehicle_type,omitempty" db:"vehicle_type"`
 	PickupLocationName string               `json:"pickup_location_name,omitempty" db:"pickup_location_name"`
+	DriverAssignmentStatus string           `json:"driver_assignment_status" db:"driver_assignment_status"`
 }
 
 // LoungeBookingWithOrders combines booking summary and all in-lounge orders
