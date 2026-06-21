@@ -846,15 +846,16 @@ func main() {
 			logger.Info("  ✅ DELETE /api/v1/lounges/:id/products/:product_id (requires approval)")
 			loungesProtectedProducts.DELETE("/:id/products/:product_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeBookingHandler.DeleteProduct)
 
-			// Special Packages for a lounge
-			logger.Info("  ✅ GET /api/v1/lounges/:id/special-packages (read-only, no approval needed)")
-			loungesProtectedProducts.GET("/:id/special-packages", loungeSpecialPackageHandler.GetSpecialPackages)
-			logger.Info("  ✅ POST /api/v1/lounges/:id/special-packages (requires approval)")
-			loungesProtectedProducts.POST("/:id/special-packages", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.CreateSpecialPackage)
-			logger.Info("  ✅ PUT /api/v1/lounges/:id/special-packages/:package_id (requires approval)")
-			loungesProtectedProducts.PUT("/:id/special-packages/:package_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.UpdateSpecialPackage)
-			logger.Info("  ✅ DELETE /api/v1/lounges/:id/special-packages/:package_id (requires approval)")
-			loungesProtectedProducts.DELETE("/:id/special-packages/:package_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.DeleteSpecialPackage)
+			// Special Packages for a lounge (New Endpoints)
+			logger.Info("  ✅ GET /api/v1/marketplace/special-packages/lounge/:lounge_id (read-only, no approval needed)")
+			v1.GET("/marketplace/special-packages/lounge/:lounge_id", middleware.AuthMiddleware(jwtService), loungeSpecialPackageHandler.GetSpecialPackages)
+			logger.Info("  ✅ POST /api/v1/marketplace/special-packages/lounge/:lounge_id (requires approval)")
+			v1.POST("/marketplace/special-packages/lounge/:lounge_id", middleware.AuthMiddleware(jwtService), middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.CreateSpecialPackage)
+			logger.Info("  ✅ PUT /api/v1/marketplace/special-packages/:package_id (requires approval)")
+			v1.PUT("/marketplace/special-packages/:package_id", middleware.AuthMiddleware(jwtService), middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.UpdateSpecialPackage)
+			logger.Info("  ✅ DELETE /api/v1/marketplace/special-packages/:package_id (requires approval)")
+			v1.DELETE("/marketplace/special-packages/:package_id", middleware.AuthMiddleware(jwtService), middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.DeleteSpecialPackage)
+
 
 			// Bookings for a lounge (owner/staff view - read-only, no approval needed)
 			logger.Info("  ✅ GET /api/v1/lounges/:id/bookings (owner/staff, read-only)")

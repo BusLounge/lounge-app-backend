@@ -198,9 +198,9 @@ func applyExtendedFields(pkg *models.LoungeSpecialPackage,
 // HANDLERS
 // ============================================================================
 
-// GetSpecialPackages handles GET /api/v1/lounges/:id/special-packages
+// GetSpecialPackages handles GET /api/v1/marketplace/special-packages/lounge/:lounge_id
 func (h *LoungeSpecialPackageHandler) GetSpecialPackages(c *gin.Context) {
-	loungeIDStr := c.Param("id")
+	loungeIDStr := c.Param("lounge_id")
 	loungeID, err := uuid.Parse(loungeIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid lounge ID format"})
@@ -227,9 +227,9 @@ func (h *LoungeSpecialPackageHandler) GetSpecialPackages(c *gin.Context) {
 	})
 }
 
-// CreateSpecialPackage handles POST /api/v1/lounges/:id/special-packages
+// CreateSpecialPackage handles POST /api/v1/marketplace/special-packages/lounge/:lounge_id
 func (h *LoungeSpecialPackageHandler) CreateSpecialPackage(c *gin.Context) {
-	loungeIDStr := c.Param("id")
+	loungeIDStr := c.Param("lounge_id")
 	loungeID, err := uuid.Parse(loungeIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid lounge ID format"})
@@ -288,7 +288,7 @@ func (h *LoungeSpecialPackageHandler) CreateSpecialPackage(c *gin.Context) {
 
 	if err := h.pkgRepo.CreateSpecialPackage(pkg); err != nil {
 		log.Printf("ERROR: Failed to create special package: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "creation_failed", Message: "Failed to create special package: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "creation_failed", Message: "Failed to create special package"})
 		return
 	}
 
@@ -298,24 +298,12 @@ func (h *LoungeSpecialPackageHandler) CreateSpecialPackage(c *gin.Context) {
 	})
 }
 
-// UpdateSpecialPackage handles PUT /api/v1/lounges/:id/special-packages/:package_id
+// UpdateSpecialPackage handles PUT /api/v1/marketplace/special-packages/:package_id
 func (h *LoungeSpecialPackageHandler) UpdateSpecialPackage(c *gin.Context) {
-	loungeIDStr := c.Param("id")
-	loungeID, err := uuid.Parse(loungeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid lounge ID format"})
-		return
-	}
-
 	pkgIDStr := c.Param("package_id")
 	pkgID, err := uuid.Parse(pkgIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid package ID format"})
-		return
-	}
-
-	ok, _ := h.verifyLoungeOwnership(c, loungeID)
-	if !ok {
 		return
 	}
 
@@ -326,8 +314,8 @@ func (h *LoungeSpecialPackageHandler) UpdateSpecialPackage(c *gin.Context) {
 		return
 	}
 
-	if pkg.LoungeID != loungeID {
-		c.JSON(http.StatusForbidden, ErrorResponse{Error: "forbidden", Message: "Package doesn't belong to this lounge"})
+	ok, _ := h.verifyLoungeOwnership(c, pkg.LoungeID)
+	if !ok {
 		return
 	}
 
@@ -386,7 +374,7 @@ func (h *LoungeSpecialPackageHandler) UpdateSpecialPackage(c *gin.Context) {
 
 	if err := h.pkgRepo.UpdateSpecialPackage(pkg); err != nil {
 		log.Printf("ERROR: Failed to update special package %s: %v", pkgID, err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "update_failed", Message: "Failed to update special package: " + err.Error()})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "update_failed", Message: "Failed to update special package"})
 		return
 	}
 
@@ -396,15 +384,8 @@ func (h *LoungeSpecialPackageHandler) UpdateSpecialPackage(c *gin.Context) {
 	})
 }
 
-// DeleteSpecialPackage handles DELETE /api/v1/lounges/:id/special-packages/:package_id
+// DeleteSpecialPackage handles DELETE /api/v1/marketplace/special-packages/:package_id
 func (h *LoungeSpecialPackageHandler) DeleteSpecialPackage(c *gin.Context) {
-	loungeIDStr := c.Param("id")
-	loungeID, err := uuid.Parse(loungeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid lounge ID format"})
-		return
-	}
-
 	pkgIDStr := c.Param("package_id")
 	pkgID, err := uuid.Parse(pkgIDStr)
 	if err != nil {
@@ -412,15 +393,15 @@ func (h *LoungeSpecialPackageHandler) DeleteSpecialPackage(c *gin.Context) {
 		return
 	}
 
-	ok, _ := h.verifyLoungeOwnership(c, loungeID)
-	if !ok {
+	// Verify package belongs to this lounge
+	pkg, err := h.pkgRepo.GetSpecialPackageByID(pkgID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: "Special package not found"})
 		return
 	}
 
-	// Verify package belongs to this lounge
-	pkg, err := h.pkgRepo.GetSpecialPackageByID(pkgID)
-	if err != nil || pkg == nil || pkg.LoungeID != loungeID {
-		c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: "Special package not found"})
+	ok, _ := h.verifyLoungeOwnership(c, pkg.LoungeID)
+	if !ok {
 		return
 	}
 

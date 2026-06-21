@@ -9108,7 +9108,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
-  /api/v1/lounges/{id}/special-packages:
+  /api/v1/marketplace/special-packages/lounge/{lounge_id}:
     get:
       summary: Get special packages for a lounge
       description: Returns all active special packages for a given lounge, ordered platinum → gold → standard.
@@ -9118,7 +9118,7 @@ paths:
       security:
       - BearerAuth: []
       parameters:
-      - name: id
+      - name: lounge_id
         in: path
         required: true
         description: Lounge UUID
@@ -9165,7 +9165,7 @@ paths:
       security:
       - BearerAuth: []
       parameters:
-      - name: id
+      - name: lounge_id
         in: path
         required: true
         description: Lounge UUID
@@ -9201,7 +9201,7 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
-  /api/v1/lounges/{id}/special-packages/{package_id}:
+  /api/v1/marketplace/special-packages/{package_id}:
     put:
       summary: Update a special package for a lounge
       description: |-
@@ -9214,13 +9214,6 @@ paths:
       security:
       - BearerAuth: []
       parameters:
-      - name: id
-        in: path
-        required: true
-        description: Lounge UUID
-        schema:
-          type: string
-          format: uuid
       - name: package_id
         in: path
         required: true
@@ -9269,13 +9262,6 @@ paths:
       security:
       - BearerAuth: []
       parameters:
-      - name: id
-        in: path
-        required: true
-        description: Lounge UUID
-        schema:
-          type: string
-          format: uuid
       - name: package_id
         in: path
         required: true
