@@ -288,7 +288,7 @@ func (h *LoungeSpecialPackageHandler) CreateSpecialPackage(c *gin.Context) {
 
 	if err := h.pkgRepo.CreateSpecialPackage(pkg); err != nil {
 		log.Printf("ERROR: Failed to create special package: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "creation_failed", Message: "Failed to create special package"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "creation_failed", Message: "Failed to create special package: " + err.Error()})
 		return
 	}
 
@@ -386,7 +386,7 @@ func (h *LoungeSpecialPackageHandler) UpdateSpecialPackage(c *gin.Context) {
 
 	if err := h.pkgRepo.UpdateSpecialPackage(pkg); err != nil {
 		log.Printf("ERROR: Failed to update special package %s: %v", pkgID, err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "update_failed", Message: "Failed to update special package"})
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "update_failed", Message: "Failed to update special package: " + err.Error()})
 		return
 	}
 
