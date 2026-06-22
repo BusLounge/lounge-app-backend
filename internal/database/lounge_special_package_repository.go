@@ -21,13 +21,13 @@ func NewLoungeSpecialPackageRepository(db DB) *LoungeSpecialPackageRepository {
 	return &LoungeSpecialPackageRepository{db: db}
 }
 
-// jsonOrNull returns a *json.RawMessage suitable for a nullable JSONB column.
-// nil / empty input → sql.NullString{Valid: false}, so the DB gets NULL.
+// jsonOrNull returns a string representation suitable for a nullable JSONB column.
+// nil / empty input → nil, so the DB gets NULL.
 func jsonOrNull(raw json.RawMessage) interface{} {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
 	}
-	return []byte(raw)
+	return string(raw)
 }
 
 // scanPackageRow scans a full row (all columns) into a LoungeSpecialPackage.
