@@ -56,7 +56,10 @@ func setupProfileTestHandler(repo *database.UserRepository, db *sqlx.DB) *AuthHa
 		},
 	}
 
-	return NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, repo, refreshTokenRepository, smsGateway, cfg)
+	auditService := services.NewAuditService(nil)
+	userSessionRepository := database.NewUserSessionRepository(db)
+
+	return NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, repo, refreshTokenRepository, userSessionRepository, smsGateway, cfg)
 }
 
 // setupAuthenticatedContext creates a Gin context with authenticated user

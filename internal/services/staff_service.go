@@ -98,9 +98,10 @@ func (s *StaffService) RegisterStaff(input *models.StaffRegistrationInput) (*mod
 
 	// IMPORTANT: Assign role to user based on staff type
 	var roleToAdd string
-	if staff.StaffType == models.StaffTypeDriver {
+	switch staff.StaffType {
+	case models.StaffTypeDriver:
 		roleToAdd = "driver"
-	} else if staff.StaffType == models.StaffTypeConductor {
+	case models.StaffTypeConductor:
 		roleToAdd = "conductor"
 	}
 

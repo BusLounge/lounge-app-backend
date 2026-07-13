@@ -54,7 +54,10 @@ func setupTokenTestHandler(db *sqlx.DB) (*AuthHandler, *jwt.Service) {
 		},
 	}
 
-	handler := NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, userRepository, refreshTokenRepository, smsGateway, cfg)
+	auditService := services.NewAuditService(nil)
+	userSessionRepository := database.NewUserSessionRepository(db)
+
+	handler := NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, userRepository, refreshTokenRepository, userSessionRepository, smsGateway, cfg)
 	return handler, jwtService
 }
 

@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	fmt.Println("🧪 SmartTransit Services Integration Test\n")
+	fmt.Println("🧪 SmartTransit Services Integration Test")
 	fmt.Println("=" + string(make([]byte, 50)) + "\n")
 
 	// Load configuration
@@ -31,7 +31,7 @@ func main() {
 	defer db.Close()
 
 	fmt.Println("✅ Database connected")
-	fmt.Println("✅ Configuration loaded\n")
+	fmt.Println("✅ Configuration loaded")
 
 	// Test 1: Phone Validator
 	testPhoneValidator()
@@ -159,7 +159,7 @@ func testJWTService(cfg *config.Config) {
 	isExpired := jwtService.IsTokenExpired(accessToken)
 	fmt.Printf("\n  ✅ Token expiry check: Expired = %v\n", isExpired)
 
-	fmt.Println("\n  Result: JWT service working correctly\n")
+	fmt.Println("\n  Result: JWT service working correctly")
 }
 
 func testOTPService(db database.DB) {
@@ -170,7 +170,7 @@ func testOTPService(db database.DB) {
 	phone := "0771234567"
 
 	// Generate OTP
-	otp, err := otpService.GenerateOTP(phone)
+	otp, err := otpService.GenerateOTP(phone, "127.0.0.1", "test-agent")
 	if err != nil {
 		fmt.Printf("  ❌ Failed to generate OTP: %v\n", err)
 		return
