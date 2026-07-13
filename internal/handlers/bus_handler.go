@@ -26,6 +26,21 @@ func NewBusHandler(busRepo *database.BusRepository, permitRepo *database.RoutePe
 	}
 }
 
+// checkBusOwnerVerified is a helper that checks if the bus owner is verified.
+// Returns the bus owner if verified, or sends an error response and returns nil if not.
+func (h *BusHandler) checkBusOwnerVerified(c *gin.Context, busOwner *models.BusOwner) bool {
+	if busOwner.VerificationStatus != models.VerificationVerified {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":               "Bus owner account is not verified",
+			"code":                "ACCOUNT_NOT_VERIFIED",
+			"verification_status": busOwner.VerificationStatus,
+			"message":             "Your account must be verified by admin before you can perform this operation. Please wait for verification or contact support.",
+		})
+		return false
+	}
+	return true
+}
+
 // GetAllBuses retrieves all buses for the authenticated bus owner
 // GET /api/v1/buses
 func (h *BusHandler) GetAllBuses(c *gin.Context) {
@@ -134,6 +149,11 @@ func (h *BusHandler) CreateBus(c *gin.Context) {
 		return
 	}
 
+	// Check if bus owner is verified before allowing bus creation
+	if !h.checkBusOwnerVerified(c, busOwner) {
+		return
+	}
+
 	// Verify permit exists and belongs to this owner
 	permit, err := h.permitRepo.GetByID(req.PermitID)
 	if err != nil {
@@ -200,11 +220,11 @@ func (h *BusHandler) CreateBus(c *gin.Context) {
 		BusNumber:           req.BusNumber,
 		LicensePlate:        permit.BusRegistrationNumber, // Get from permit
 		BusType:             models.BusType(req.BusType),
-		TotalSeats:          req.TotalSeats,
 		ManufacturingYear:   req.ManufacturingYear,
 		LastMaintenanceDate: lastMaintenanceDate,
 		InsuranceExpiry:     insuranceExpiry,
 		Status:              status,
+		SeatLayoutID:        req.SeatLayoutID,
 		HasWifi:             req.HasWifi,
 		HasAC:               req.HasAC,
 		HasChargingPorts:    req.HasChargingPorts,
@@ -253,6 +273,11 @@ func (h *BusHandler) UpdateBus(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get bus owner profile"})
+		return
+	}
+
+	// Check if bus owner is verified before allowing bus update
+	if !h.checkBusOwnerVerified(c, busOwner) {
 		return
 	}
 
@@ -313,6 +338,11 @@ func (h *BusHandler) DeleteBus(c *gin.Context) {
 		return
 	}
 
+	// Check if bus owner is verified before allowing bus deletion
+	if !h.checkBusOwnerVerified(c, busOwner) {
+		return
+	}
+
 	// Delete bus (repository verifies ownership using bus_owner_id)
 	err = h.busRepo.Delete(busID, busOwner.ID)
 	if err != nil {
@@ -342,7 +372,7 @@ func (h *BusHandler) GetBusesByStatus(c *gin.Context) {
 	// Validate status
 	busStatus := models.BusStatus(status)
 	if busStatus != models.BusStatusActive && busStatus != models.BusStatusMaintenance &&
-	   busStatus != models.BusStatusInactive {
+		busStatus != models.BusStatusInactive {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid status. Must be active, maintenance, or inactive"})
 		return
 	}

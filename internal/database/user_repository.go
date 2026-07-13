@@ -113,6 +113,7 @@ func (r *UserRepository) CreateUserWithRole(phone string, role string) (*models.
 		"conductor":    true,
 		"bus_owner":    true,
 		"lounge_owner": true,
+		"lounge_staff": true,//new addition 
 		"admin":        true,
 	}
 
@@ -280,6 +281,32 @@ func (r *UserRepository) UpdateUserNames(id uuid.UUID, firstName, lastName strin
 	result, err := r.db.Exec(query, firstName, lastName, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to update user names: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
+
+// UpdateUserEmail updates only the email field of a user
+func (r *UserRepository) UpdateUserEmail(id uuid.UUID, email string) error {
+	query := `
+		UPDATE users
+		SET email = $1,
+		    updated_at = $2
+		WHERE id = $3
+	`
+
+	result, err := r.db.Exec(query, email, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to update email: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -517,4 +544,89 @@ func (r *UserRepository) CountUsers() (int, error) {
 	}
 
 	return count, nil
+}
+
+// add users with there full data into the user table (this makes it easy to search for users )
+func (r *UserRepository) CreateUserWithFullData(
+	phone string, 
+	role string,
+	name string,
+	nic string,
+	email string,
+)(*models.User, error){
+	
+	// valid roles 
+	validRoles := map[string]bool{
+		"passenger":    true,
+		"driver":       true,
+		"conductor":    true,
+		"bus_owner":    true,
+		"lounge_owner": true,
+		"lounge_staff": true,
+		"admin":        true,
+	}
+
+	if !validRoles[role] {
+		return nil, fmt.Errorf("invalid role: %s", role)
+	}
+	 // Determine if email should be NULL or a valid value
+    emailValid := email != ""
+
+	user :=&models.User{
+		ID:		     uuid.New(),
+		Phone:       phone,
+		FirstName:    models.NullString{
+			NullString: sql.NullString{
+				String: name,
+				Valid: true,
+			},
+		},
+		NIC: models.NullString{
+			NullString: sql.NullString{
+				String: nic,
+				Valid: true,
+			},
+		},
+		Email:models.NullString{
+			NullString: sql.NullString{
+				String: email,
+				Valid: emailValid,  // Only mark as valid if email is not empty
+			},
+		},
+		Roles:       []string{role},
+		Status:           "active",
+		ProfileCompleted: false,
+		PhoneVerified:    true, // Verified via OTP
+		EmailVerified:    false,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+	}
+
+	query := `
+		INSERT INTO users (
+			id, phone, first_name, nic, email, roles, status, profile_completed, phone_verified, email_verified,
+			created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	`
+	_,err := r.db.Exec(
+		query,
+		user.ID,
+		user.Phone,
+		user.FirstName,
+		user.NIC,
+		user.Email,
+		user.Roles,
+		user.Status,
+		user.ProfileCompleted,
+		user.PhoneVerified,
+		user.EmailVerified,
+		user.CreatedAt,
+		user.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user with full data: %w", err)
+	}
+
+
+	return user, nil
 }

@@ -17,8 +17,8 @@ type Lounge struct {
 	Description sql.NullString `db:"description" json:"description,omitempty"`
 
 	// Location
-	Address    string         `db:"address" json:"address"`
-	City       string         `db:"city" json:"city"`
+	Address    string     `db:"address" json:"address"`
+	District   *uuid.UUID `db:"district" json:"district,omitempty"`
 	State      sql.NullString `db:"state" json:"state,omitempty"`
 	Country    sql.NullString `db:"country" json:"country,omitempty"`
 	PostalCode sql.NullString `db:"postal_code" json:"postal_code,omitempty"`
@@ -28,9 +28,13 @@ type Lounge struct {
 	// Contact
 	ContactPhone sql.NullString `db:"contact_phone" json:"contact_phone,omitempty"`
 
+	// Capacity
+	Capacity sql.NullInt64 `db:"capacity" json:"capacity,omitempty"` // Maximum number of people
+
 	// Pricing (in LKR)
 	Price1Hour    sql.NullString `db:"price_1_hour" json:"price_1_hour,omitempty"`       // DECIMAL stored as string
 	Price2Hours   sql.NullString `db:"price_2_hours" json:"price_2_hours,omitempty"`     // DECIMAL stored as string
+	Price3Hours   sql.NullString `db:"price_3_hours" json:"price_3_hours,omitempty"`     // DECIMAL stored as string
 	PriceUntilBus sql.NullString `db:"price_until_bus" json:"price_until_bus,omitempty"` // DECIMAL stored as string
 
 	// Amenities (JSONB - array of strings)
@@ -40,22 +44,22 @@ type Lounge struct {
 	Images []byte `db:"images" json:"images,omitempty"` // ["url1", "url2"]
 
 	// Status
-	Status        string `db:"status" json:"status"`               // pending, active, inactive, suspended
-	IsOperational bool   `db:"is_operational" json:"is_operational"`
+	Status        LoungeStatus `db:"status" json:"status"` // pending, approved, suspended, rejected
+	IsOperational bool         `db:"is_operational" json:"is_operational"`
 
 	// Metadata
-	TotalStaff    int            `db:"total_staff" json:"total_staff"`
 	AverageRating sql.NullString `db:"average_rating" json:"average_rating,omitempty"` // DECIMAL stored as string
-	TotalBookings int            `db:"total_bookings" json:"total_bookings"`
 
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
-// LoungeStatus constants
+// LoungeStatus represents the lounge status ENUM
+type LoungeStatus string
+
 const (
-	LoungeStatusPending   = "pending"
-	LoungeStatusActive    = "active"
-	LoungeStatusInactive  = "inactive"
-	LoungeStatusSuspended = "suspended"
+	LoungeStatusPending   LoungeStatus = "pending"
+	LoungeStatusApproved  LoungeStatus = "approved"
+	LoungeStatusSuspended LoungeStatus = "suspended"
+	LoungeStatusRejected  LoungeStatus = "rejected"
 )

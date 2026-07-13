@@ -14,12 +14,12 @@ import (
 )
 
 type TripScheduleHandler struct {
-	scheduleRepo      *database.TripScheduleRepository
-	permitRepo        *database.RoutePermitRepository
-	busOwnerRepo      *database.BusOwnerRepository
-	busRepo           *database.BusRepository
-	routeRepo         *database.BusOwnerRouteRepository
-	tripGeneratorSvc  *services.TripGeneratorService
+	scheduleRepo     *database.TripScheduleRepository
+	permitRepo       *database.RoutePermitRepository
+	busOwnerRepo     *database.BusOwnerRepository
+	busRepo          *database.BusRepository
+	routeRepo        *database.BusOwnerRouteRepository
+	tripGeneratorSvc *services.TripGeneratorService
 }
 
 func NewTripScheduleHandler(
@@ -38,6 +38,21 @@ func NewTripScheduleHandler(
 		routeRepo:        routeRepo,
 		tripGeneratorSvc: tripGeneratorSvc,
 	}
+}
+
+// checkBusOwnerVerified checks if the bus owner is verified and returns 403 if not.
+// Returns true if NOT verified (caller should return), false if verified (caller can proceed).
+func (h *TripScheduleHandler) checkBusOwnerVerified(c *gin.Context, busOwner *models.BusOwner) bool {
+	if busOwner.VerificationStatus != models.VerificationVerified {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":               "Account not verified",
+			"code":                "ACCOUNT_NOT_VERIFIED",
+			"verification_status": busOwner.VerificationStatus,
+			"message":             "Your account must be verified by an administrator before you can perform this action",
+		})
+		return true
+	}
+	return false
 }
 
 // GetAllSchedules retrieves all trip schedules for the authenticated bus owner
@@ -173,6 +188,11 @@ func (h *TripScheduleHandler) CreateSchedule(c *gin.Context) {
 		return
 	}
 
+	// Check verification status
+	if h.checkBusOwnerVerified(c, busOwner) {
+		return
+	}
+
 	var req models.CreateTripScheduleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "details": err.Error()})
@@ -254,30 +274,40 @@ func (h *TripScheduleHandler) CreateSchedule(c *gin.Context) {
 	}
 
 	// Create schedule
+	permitID := req.PermitID
+
+	// Convert arrays to strings for database storage
+	recurrenceDaysStr := models.IntSliceToString(req.RecurrenceDays)
+	var specificDatesStr *string
+	if len(specificDates) > 0 {
+		dateStr := models.DateSliceToString(specificDates)
+		specificDatesStr = &dateStr
+	}
+
 	schedule := &models.TripSchedule{
-		ID:                   uuid.New().String(),
-		BusOwnerID:           busOwner.ID,
-		PermitID:             req.PermitID,
-		BusID:                req.BusID,
-		ScheduleName:         req.ScheduleName,
-		RecurrenceType:       models.RecurrenceType(req.RecurrenceType),
-		RecurrenceDays:       models.IntArray(req.RecurrenceDays),
-		SpecificDates:        specificDates,
-		DepartureTime:        req.DepartureTime,
-		EstimatedArrivalTime: req.EstimatedArrivalTime,
-		Direction:            req.Direction,
-		TripsPerDay:          req.TripsPerDay,
-		BaseFare:             req.BaseFare,
-		IsBookable:           req.IsBookable,
-		MaxBookableSeats:     req.MaxBookableSeats,
-		AdvanceBookingHours:  req.AdvanceBookingHours,
-		DefaultDriverID:      req.DefaultDriverID,
-		DefaultConductorID:   req.DefaultConductorID,
-		SelectedStopIDs:      models.UUIDArray(req.SelectedStopIDs),
-		IsActive:             true,
-		ValidFrom:            validFrom,
-		ValidUntil:           validUntil,
-		Notes:                req.Notes,
+		ID:                       uuid.New().String(),
+		BusOwnerID:               busOwner.ID,
+		PermitID:                 &permitID,
+		BusID:                    req.BusID,
+		ScheduleName:             req.ScheduleName,
+		RecurrenceType:           models.RecurrenceType(req.RecurrenceType),
+		RecurrenceDays:           recurrenceDaysStr,
+		SpecificDates:            specificDatesStr,
+		DepartureTime:            req.DepartureTime,
+		EstimatedDurationMinutes: req.EstimatedDurationMinutes,
+		Direction:                req.Direction,
+		TripsPerDay:              req.TripsPerDay,
+		BaseFare:                 req.BaseFare,
+		IsBookable:               req.IsBookable,
+		MaxBookableSeats:         req.MaxBookableSeats,
+		AdvanceBookingHours:      req.AdvanceBookingHours,
+		DefaultDriverID:          req.DefaultDriverID,
+		DefaultConductorID:       req.DefaultConductorID,
+		SelectedStopIDs:          models.UUIDArray(req.SelectedStopIDs),
+		IsActive:                 true,
+		ValidFrom:                validFrom,
+		ValidUntil:               validUntil,
+		Notes:                    req.Notes,
 	}
 
 	// Default advance booking hours
@@ -326,6 +356,11 @@ func (h *TripScheduleHandler) UpdateSchedule(c *gin.Context) {
 		return
 	}
 
+	// Check verification status
+	if h.checkBusOwnerVerified(c, busOwner) {
+		return
+	}
+
 	scheduleID := c.Param("id")
 
 	// Get existing schedule
@@ -361,7 +396,7 @@ func (h *TripScheduleHandler) UpdateSchedule(c *gin.Context) {
 	schedule.BusID = req.BusID
 	schedule.ScheduleName = req.ScheduleName
 	schedule.RecurrenceType = models.RecurrenceType(req.RecurrenceType)
-	schedule.RecurrenceDays = models.IntArray(req.RecurrenceDays)
+	schedule.RecurrenceDays = models.IntSliceToString(req.RecurrenceDays)
 	schedule.DepartureTime = req.DepartureTime
 	schedule.BaseFare = req.BaseFare
 	schedule.IsBookable = req.IsBookable
@@ -393,7 +428,10 @@ func (h *TripScheduleHandler) UpdateSchedule(c *gin.Context) {
 			}
 			specificDates = append(specificDates, date)
 		}
-		schedule.SpecificDates = specificDates
+		dateStr := models.DateSliceToString(specificDates)
+		schedule.SpecificDates = &dateStr
+	} else {
+		schedule.SpecificDates = nil
 	}
 
 	if err := h.scheduleRepo.Update(schedule); err != nil {
@@ -480,6 +518,11 @@ func (h *TripScheduleHandler) DeleteSchedule(c *gin.Context) {
 		return
 	}
 
+	// Check verification status
+	if h.checkBusOwnerVerified(c, busOwner) {
+		return
+	}
+
 	scheduleID := c.Param("id")
 
 	schedule, err := h.scheduleRepo.GetByID(scheduleID)
@@ -525,6 +568,11 @@ func (h *TripScheduleHandler) CreateTimetable(c *gin.Context) {
 		return
 	}
 
+	// Check verification status
+	if h.checkBusOwnerVerified(c, busOwner) {
+		return
+	}
+
 	var req models.CreateTimetableRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "details": err.Error()})
@@ -553,70 +601,74 @@ func (h *TripScheduleHandler) CreateTimetable(c *gin.Context) {
 		return
 	}
 
-	// Verify permit ownership
-	permit, err := h.permitRepo.GetByID(req.PermitID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Permit not found"})
+	// Permit validation is optional - permit will be assigned later to specific trips
+	// If provided, validate ownership only (no fare/seat limits enforcement)
+	if req.PermitID != nil && *req.PermitID != "" {
+		permit, err := h.permitRepo.GetByID(*req.PermitID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Permit not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch permit"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch permit"})
+
+		if permit.BusOwnerID != busOwner.ID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this permit"})
+			return
+		}
+
+		// Check permit is valid
+		if !permit.IsValid() {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Permit is not valid or expired"})
+			return
+		}
+
+		// Note: Permit details (approved_fare, approved_seating_capacity) are shown in UI
+		// but not enforced here. User decides what fare and seats to set for the timetable.
+	}
+
+	// Parse valid_from date (required)
+	validFrom, err := time.Parse("2006-01-02", req.ValidFrom)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid valid_from date format", "details": err.Error()})
 		return
 	}
 
-	if permit.BusOwnerID != busOwner.ID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied to this permit"})
-		return
-	}
-
-	// Check permit is valid
-	if !permit.IsValid() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Permit is not valid or expired"})
-		return
-	}
-
-	// Validate fare against permit approved fare
-	if req.BaseFare > permit.ApprovedFare {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Base fare exceeds permit approved fare",
-			"details": map[string]interface{}{
-				"requested_fare": req.BaseFare,
-				"approved_fare":  permit.ApprovedFare,
-			},
-		})
-		return
-	}
-
-	// Validate max bookable seats against permit approved seating capacity
-	if req.MaxBookableSeats > permit.ApprovedSeatingCapacity {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Max bookable seats exceeds permit approved seating capacity",
-			"details": map[string]interface{}{
-				"requested_seats": req.MaxBookableSeats,
-				"approved_seats":  permit.ApprovedSeatingCapacity,
-			},
-		})
-		return
+	// Parse valid_until date (optional)
+	var validUntil *time.Time
+	if req.ValidUntil != nil {
+		parsed, err := time.Parse("2006-01-02", *req.ValidUntil)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid valid_until date format", "details": err.Error()})
+			return
+		}
+		validUntil = &parsed
 	}
 
 	// Create timetable
+	recurrenceDaysStr := models.IntSliceToString(req.RecurrenceDays)
+
 	schedule := &models.TripSchedule{
-		ID:                   uuid.New().String(),
-		BusOwnerID:           busOwner.ID,
-		PermitID:             req.PermitID,
-		CustomRouteID:        &req.CustomRouteID,
-		ScheduleName:         req.ScheduleName,
-		RecurrenceType:       models.RecurrenceType(req.RecurrenceType),
-		RecurrenceDays:       req.RecurrenceDays,
-		RecurrenceInterval:   req.RecurrenceInterval,
-		DepartureTime:        req.DepartureTime,
-		EstimatedArrivalTime: req.EstimatedArrivalTime,
-		BaseFare:             req.BaseFare,
-		IsBookable:           req.IsBookable,
-		MaxBookableSeats:     &req.MaxBookableSeats,
-		BookingAdvanceHours:  req.BookingAdvanceHours,
-		IsActive:             true,
-		Notes:                req.Notes,
+		ID:                       uuid.New().String(),
+		BusOwnerID:               busOwner.ID,
+		PermitID:                 req.PermitID,
+		BusOwnerRouteID:          &req.CustomRouteID,
+		ScheduleName:             req.ScheduleName,
+		RecurrenceType:           models.RecurrenceType(req.RecurrenceType),
+		RecurrenceDays:           recurrenceDaysStr,
+		RecurrenceInterval:       req.RecurrenceInterval,
+		DepartureTime:            req.DepartureTime,
+		EstimatedDurationMinutes: req.EstimatedDurationMinutes,
+		BaseFare:                 req.BaseFare,
+		IsBookable:               req.IsBookable,
+		MaxBookableSeats:         &req.MaxBookableSeats,
+		BookingAdvanceHours:      req.BookingAdvanceHours,
+		IsActive:                 true,
+		ValidFrom:                validFrom,
+		ValidUntil:               validUntil,
+		Notes:                    req.Notes,
 	}
 
 	if err := h.scheduleRepo.CreateTimetable(schedule); err != nil {
@@ -624,5 +676,19 @@ func (h *TripScheduleHandler) CreateTimetable(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, schedule)
+	// IMMEDIATE GENERATION: Generate trips for next 7 days (same as CreateSchedule)
+	tripsGenerated, err := h.tripGeneratorSvc.GenerateTripsForNewSchedule(schedule)
+	if err != nil {
+		// Log error but don't fail the request - schedule was created successfully
+		println("WARNING: Failed to generate trips for timetable:", schedule.ID, "Error:", err.Error())
+	}
+
+	// Return schedule with trip count
+	response := gin.H{
+		"schedule":        schedule,
+		"trips_generated": tripsGenerated,
+		"message":         "Timetable created successfully",
+	}
+
+	c.JSON(http.StatusCreated, response)
 }

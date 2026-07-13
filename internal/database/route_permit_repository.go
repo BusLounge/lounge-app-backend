@@ -25,10 +25,10 @@ func (r *RoutePermitRepository) Create(permit *models.RoutePermit) error {
 		INSERT INTO route_permits (
 			id, bus_owner_id, permit_number, bus_registration_number,
 			master_route_id, via,
-			issue_date, expiry_date, permit_type, approved_fare, max_trips_per_day,
+			issue_date, expiry_date, permit_type, approved_fare, approved_seating_capacity, max_trips_per_day,
 			allowed_bus_types, restrictions, status, verified_at, permit_document_url
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
 		)
 		RETURNING created_at, updated_at
 	`
@@ -37,7 +37,7 @@ func (r *RoutePermitRepository) Create(permit *models.RoutePermit) error {
 		query,
 		permit.ID, permit.BusOwnerID, permit.PermitNumber, permit.BusRegistrationNumber,
 		permit.MasterRouteID, permit.Via,
-		permit.IssueDate, permit.ExpiryDate, permit.PermitType, permit.ApprovedFare, permit.MaxTripsPerDay,
+		permit.IssueDate, permit.ExpiryDate, permit.PermitType, permit.ApprovedFare, permit.ApprovedSeatingCapacity, permit.MaxTripsPerDay,
 		permit.AllowedBusTypes, permit.Restrictions, permit.Status, permit.VerifiedAt, permit.PermitDocumentURL,
 	).Scan(&permit.CreatedAt, &permit.UpdatedAt)
 
@@ -50,7 +50,7 @@ func (r *RoutePermitRepository) GetByID(permitID string) (*models.RoutePermitWit
 		SELECT
 			rp.id, rp.bus_owner_id, rp.permit_number, rp.bus_registration_number,
 			rp.master_route_id, rp.via,
-			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.max_trips_per_day,
+			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.approved_seating_capacity, rp.max_trips_per_day,
 			rp.allowed_bus_types, rp.restrictions, rp.status, rp.verified_at, rp.permit_document_url,
 			rp.created_at, rp.updated_at,
 			mr.route_number, mr.route_name, mr.origin_city, mr.destination_city,
@@ -74,7 +74,7 @@ func (r *RoutePermitRepository) GetByID(permitID string) (*models.RoutePermitWit
 	err := r.db.QueryRow(query, permitID).Scan(
 		&permit.ID, &permit.BusOwnerID, &permit.PermitNumber, &permit.BusRegistrationNumber,
 		&permit.MasterRouteID, &via,
-		&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &maxTripsPerDay,
+		&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &permit.ApprovedSeatingCapacity, &maxTripsPerDay,
 		&allowedBusTypes, &restrictions, &permit.Status, &verifiedAt, &permitDocumentURL,
 		&permit.CreatedAt, &permit.UpdatedAt,
 		&permit.RouteNumber, &permit.RouteName, &permit.FullOriginCity, &permit.FullDestinationCity,
@@ -123,7 +123,7 @@ func (r *RoutePermitRepository) GetByOwnerID(busOwnerID string) ([]models.RouteP
 		SELECT
 			rp.id, rp.bus_owner_id, rp.permit_number, rp.bus_registration_number,
 			rp.master_route_id, rp.via,
-			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.max_trips_per_day,
+			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.approved_seating_capacity, rp.max_trips_per_day,
 			rp.allowed_bus_types, rp.restrictions, rp.status, rp.verified_at, rp.permit_document_url,
 			rp.created_at, rp.updated_at,
 			mr.route_number, mr.route_name, mr.origin_city, mr.destination_city,
@@ -156,7 +156,7 @@ func (r *RoutePermitRepository) GetByOwnerID(busOwnerID string) ([]models.RouteP
 		err := rows.Scan(
 			&permit.ID, &permit.BusOwnerID, &permit.PermitNumber, &permit.BusRegistrationNumber,
 			&permit.MasterRouteID, &via,
-			&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &maxTripsPerDay,
+			&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &permit.ApprovedSeatingCapacity, &maxTripsPerDay,
 			&allowedBusTypes, &restrictions, &permit.Status, &verifiedAt, &permitDocumentURL,
 			&permit.CreatedAt, &permit.UpdatedAt,
 			&permit.RouteNumber, &permit.RouteName, &permit.FullOriginCity, &permit.FullDestinationCity,
@@ -207,7 +207,7 @@ func (r *RoutePermitRepository) GetByPermitNumber(permitNumber string, busOwnerI
 		SELECT
 			rp.id, rp.bus_owner_id, rp.permit_number, rp.bus_registration_number,
 			rp.master_route_id, rp.via,
-			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.max_trips_per_day,
+			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.approved_seating_capacity, rp.max_trips_per_day,
 			rp.allowed_bus_types, rp.restrictions, rp.status, rp.verified_at, rp.permit_document_url,
 			rp.created_at, rp.updated_at,
 			mr.route_number, mr.route_name, mr.origin_city, mr.destination_city,
@@ -231,7 +231,7 @@ func (r *RoutePermitRepository) GetByPermitNumber(permitNumber string, busOwnerI
 	err := r.db.QueryRow(query, permitNumber, busOwnerID).Scan(
 		&permit.ID, &permit.BusOwnerID, &permit.PermitNumber, &permit.BusRegistrationNumber,
 		&permit.MasterRouteID, &via,
-		&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &maxTripsPerDay,
+		&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &permit.ApprovedSeatingCapacity, &maxTripsPerDay,
 		&allowedBusTypes, &restrictions, &permit.Status, &verifiedAt, &permitDocumentURL,
 		&permit.CreatedAt, &permit.UpdatedAt,
 		&permit.RouteNumber, &permit.RouteName, &permit.FullOriginCity, &permit.FullDestinationCity,
@@ -280,7 +280,7 @@ func (r *RoutePermitRepository) GetByBusRegistration(busRegistration string, bus
 		SELECT
 			rp.id, rp.bus_owner_id, rp.permit_number, rp.bus_registration_number,
 			rp.master_route_id, rp.via,
-			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.max_trips_per_day,
+			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.approved_seating_capacity, rp.max_trips_per_day,
 			rp.allowed_bus_types, rp.restrictions, rp.status, rp.verified_at, rp.permit_document_url,
 			rp.created_at, rp.updated_at,
 			mr.route_number, mr.route_name, mr.origin_city, mr.destination_city,
@@ -304,7 +304,7 @@ func (r *RoutePermitRepository) GetByBusRegistration(busRegistration string, bus
 	err := r.db.QueryRow(query, busRegistration, busOwnerID).Scan(
 		&permit.ID, &permit.BusOwnerID, &permit.PermitNumber, &permit.BusRegistrationNumber,
 		&permit.MasterRouteID, &via,
-		&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &maxTripsPerDay,
+		&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &permit.ApprovedSeatingCapacity, &maxTripsPerDay,
 		&allowedBusTypes, &restrictions, &permit.Status, &verifiedAt, &permitDocumentURL,
 		&permit.CreatedAt, &permit.UpdatedAt,
 		&permit.RouteNumber, &permit.RouteName, &permit.FullOriginCity, &permit.FullDestinationCity,
@@ -376,6 +376,12 @@ func (r *RoutePermitRepository) Update(permitID string, req *models.UpdateRouteP
 	if req.ApprovedFare != nil {
 		updates = append(updates, fmt.Sprintf("approved_fare = $%d", argCount))
 		args = append(args, *req.ApprovedFare)
+		argCount++
+	}
+
+	if req.ApprovedSeatingCapacity != nil {
+		updates = append(updates, fmt.Sprintf("approved_seating_capacity = $%d", argCount))
+		args = append(args, *req.ApprovedSeatingCapacity)
 		argCount++
 	}
 
@@ -453,7 +459,7 @@ func (r *RoutePermitRepository) GetValidPermits(busOwnerID string) ([]models.Rou
 		SELECT
 			rp.id, rp.bus_owner_id, rp.permit_number, rp.bus_registration_number,
 			rp.master_route_id, rp.via,
-			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.max_trips_per_day,
+			rp.issue_date, rp.expiry_date, rp.permit_type, rp.approved_fare, rp.approved_seating_capacity, rp.max_trips_per_day,
 			rp.allowed_bus_types, rp.restrictions, rp.status, rp.verified_at, rp.permit_document_url,
 			rp.created_at, rp.updated_at,
 			mr.route_number, mr.route_name, mr.origin_city, mr.destination_city,
@@ -488,7 +494,7 @@ func (r *RoutePermitRepository) GetValidPermits(busOwnerID string) ([]models.Rou
 		err := rows.Scan(
 			&permit.ID, &permit.BusOwnerID, &permit.PermitNumber, &permit.BusRegistrationNumber,
 			&permit.MasterRouteID, &via,
-			&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &maxTripsPerDay,
+			&permit.IssueDate, &permit.ExpiryDate, &permit.PermitType, &permit.ApprovedFare, &permit.ApprovedSeatingCapacity, &maxTripsPerDay,
 			&allowedBusTypes, &restrictions, &permit.Status, &verifiedAt, &permitDocumentURL,
 			&permit.CreatedAt, &permit.UpdatedAt,
 			&permit.RouteNumber, &permit.RouteName, &permit.FullOriginCity, &permit.FullDestinationCity,

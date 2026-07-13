@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,26 +27,29 @@ type DialogGateway struct {
 	tokenExpiry time.Time
 
 	// SMS Auto-read (Android)
-	appHash string // 11-character hash for SMS auto-read feature
+	driverAppHash    string // Driver/Conductor app signature hash
+	passengerAppHash string // Passenger app signature hash
 }
 
 // DialogConfig holds configuration for Dialog SMS Gateway
 type DialogConfig struct {
-	APIURL   string
-	Username string
-	Password string
-	Mask     string
-	AppHash  string // Optional: App signature hash for SMS auto-read (Android)
+	APIURL           string
+	Username         string
+	Password         string
+	Mask             string
+	DriverAppHash    string // Driver/Conductor app signature hash
+	PassengerAppHash string // Passenger app signature hash
 }
 
 // NewDialogGateway creates a new Dialog SMS Gateway client
 func NewDialogGateway(config DialogConfig) *DialogGateway {
 	return &DialogGateway{
-		apiURL:   config.APIURL,
-		username: config.Username,
-		password: config.Password,
-		mask:     config.Mask,
-		appHash:  config.AppHash,
+		apiURL:           config.APIURL,
+		username:         config.Username,
+		password:         config.Password,
+		mask:             config.Mask,
+		driverAppHash:    config.DriverAppHash,
+		passengerAppHash: config.PassengerAppHash,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -87,12 +91,12 @@ type SendSMSResponse struct {
 	Status  string `json:"status"`
 	Comment string `json:"comment"`
 	Data    struct {
-		CampaignID         int     `json:"campaignId"`
-		CampaignCost       float64 `json:"campaignCost"`
-		WalletBalance      float64 `json:"walletBalance"`
-		DuplicatesRemoved  int     `json:"duplicatesRemoved"`
-		InvalidNumbers     int     `json:"invalidNumbers"`
-		MaskBlockedNumbers int     `json:"mask_blocked_numbers"`
+		CampaignID         int           `json:"campaignId"`
+		CampaignCost       float64       `json:"campaignCost"`
+		WalletBalance      FlexibleFloat `json:"walletBalance"`
+		DuplicatesRemoved  int           `json:"duplicatesRemoved"`
+		InvalidNumbers     int           `json:"invalidNumbers"`
+		MaskBlockedNumbers int           `json:"mask_blocked_numbers"`
 	} `json:"data"`
 	ErrCode string `json:"errCode"`
 }
@@ -227,8 +231,8 @@ func FormatPhoneForDialog(phone string) (string, error) {
 }
 
 // SendOTP sends an OTP to a single phone number
-func (d *DialogGateway) SendOTP(phone string, otpCode string) (int64, error) {
-	fmt.Printf("📱 SendOTP called - Phone: %s, OTP: %s\n", phone, otpCode)
+func (d *DialogGateway) SendOTP(phone, otpCode, appType string) (int64, error) {
+	fmt.Printf("📱 SendOTP called - Phone: %s, OTP: %s, AppType: %s\n", phone, otpCode, appType)
 
 	// Ensure we have a valid token
 	fmt.Println("🔑 Checking access token...")
@@ -250,12 +254,25 @@ func (d *DialogGateway) SendOTP(phone string, otpCode string) (int64, error) {
 	// Generate unique transaction ID (timestamp in microseconds)
 	transactionID := time.Now().UnixMicro()
 
+	// Determine which app hash to use based on appType
+	var appHash string
+	switch appType {
+	case "driver", "conductor":
+		appHash = d.driverAppHash
+	case "passenger":
+		appHash = d.passengerAppHash
+	default:
+		// Default to passenger hash if not specified or unknown
+		// This covers the case where appType is empty (legacy calls)
+		appHash = d.passengerAppHash
+	}
+
 	// Prepare SMS message with app hash for Android SMS auto-read
 	var message string
-	if d.appHash != "" {
+	if appHash != "" {
 		// Format for Android SMS auto-read:
 		// OTP code followed by message and app hash on a new line
-		message = fmt.Sprintf("Your SmartTransit OTP is: %s\n\nPlease use the above OTP to complete your action.\n\nRegards,\nSmartTransit\n%s", otpCode, d.appHash)
+		message = fmt.Sprintf("Your SmartTransit OTP is: %s\n\nPlease use the above OTP to complete your action.\n\nRegards,\nSmartTransit\n%s", otpCode, appHash)
 	} else {
 		// Fallback message without app hash
 		message = fmt.Sprintf("Your OTP is %s. Valid for 5 minutes. Do not share this code with anyone.", otpCode)
@@ -325,6 +342,71 @@ func (d *DialogGateway) SendOTP(phone string, otpCode string) (int64, error) {
 
 	fmt.Printf("✅ SMS sent successfully! Campaign ID: %d, Cost: %.2f\n",
 		smsResp.Data.CampaignID, smsResp.Data.CampaignCost)
+	return transactionID, nil
+}
+
+// SendMessage sends a plain text message to a single recipient.
+func (d *DialogGateway) SendMessage(phone, message string) (int64, error) {
+	if strings.TrimSpace(message) == "" {
+		return 0, fmt.Errorf("message cannot be empty")
+	}
+
+	if err := d.ensureValidToken(); err != nil {
+		return 0, fmt.Errorf("failed to get access token: %w", err)
+	}
+
+	formattedPhone, err := FormatPhoneForDialog(phone)
+	if err != nil {
+		return 0, fmt.Errorf("failed to format phone number: %w", err)
+	}
+
+	transactionID := time.Now().UnixMicro()
+	smsReq := SendSMSRequest{
+		MSISDN: []SMSRecipient{
+			{Mobile: formattedPhone},
+		},
+		Message:       message,
+		SourceAddress: d.mask,
+		TransactionID: transactionID,
+		PaymentMethod: 0,
+	}
+
+	jsonData, err := json.Marshal(smsReq)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal SMS request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/sms", d.apiURL)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return 0, fmt.Errorf("failed to create SMS request: %w", err)
+	}
+
+	d.tokenMutex.RLock()
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", d.token))
+	d.tokenMutex.RUnlock()
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to send SMS request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read SMS response: %w", err)
+	}
+
+	var smsResp SendSMSResponse
+	if err := json.Unmarshal(body, &smsResp); err != nil {
+		return 0, fmt.Errorf("failed to parse SMS response: %w", err)
+	}
+
+	if smsResp.Status != "success" {
+		return 0, fmt.Errorf("SMS sending failed: %s (error code: %s)", smsResp.Comment, smsResp.ErrCode)
+	}
+
 	return transactionID, nil
 }
 
@@ -459,4 +541,39 @@ func (d *DialogGateway) SendBulkSMS(phones []string, message string) (int64, err
 // GetName returns the name of this SMS gateway
 func (d *DialogGateway) GetName() string {
 	return "Dialog API v2 Gateway"
+}
+
+// FlexibleFloat handles numbers that may be returned as strings in JSON
+type FlexibleFloat float64
+
+// UnmarshalJSON accepts both numeric and quoted string values
+func (f *FlexibleFloat) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || string(b) == "null" {
+		return nil
+	}
+
+	// If quoted string
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		if s == "" {
+			return nil
+		}
+		v, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return err
+		}
+		*f = FlexibleFloat(v)
+		return nil
+	}
+
+	// Regular number
+	var n float64
+	if err := json.Unmarshal(b, &n); err != nil {
+		return err
+	}
+	*f = FlexibleFloat(n)
+	return nil
 }

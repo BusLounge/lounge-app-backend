@@ -24,8 +24,8 @@ func (r *BusRepository) Create(bus *models.Bus) error {
 	query := `
 		INSERT INTO buses (
 			id, bus_owner_id, permit_id, bus_number, license_plate,
-			bus_type, total_seats, manufacturing_year, last_maintenance_date,
-			insurance_expiry, status, has_wifi, has_ac, has_charging_ports,
+			bus_type, manufacturing_year, last_maintenance_date,
+			insurance_expiry, status, seat_layout_id, has_wifi, has_ac, has_charging_ports,
 			has_entertainment, has_refreshments
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
@@ -36,8 +36,8 @@ func (r *BusRepository) Create(bus *models.Bus) error {
 	err := r.db.QueryRow(
 		query,
 		bus.ID, bus.BusOwnerID, bus.PermitID, bus.BusNumber, bus.LicensePlate,
-		bus.BusType, bus.TotalSeats, bus.ManufacturingYear, bus.LastMaintenanceDate,
-		bus.InsuranceExpiry, bus.Status, bus.HasWifi, bus.HasAC, bus.HasChargingPorts,
+		bus.BusType, bus.ManufacturingYear, bus.LastMaintenanceDate,
+		bus.InsuranceExpiry, bus.Status, bus.SeatLayoutID, bus.HasWifi, bus.HasAC, bus.HasChargingPorts,
 		bus.HasEntertainment, bus.HasRefreshments,
 	).Scan(&bus.CreatedAt, &bus.UpdatedAt)
 
@@ -49,8 +49,8 @@ func (r *BusRepository) GetByID(busID string) (*models.Bus, error) {
 	query := `
 		SELECT
 			id, bus_owner_id, permit_id, bus_number, license_plate,
-			bus_type, total_seats, manufacturing_year, last_maintenance_date,
-			insurance_expiry, status, has_wifi, has_ac, has_charging_ports,
+			bus_type, manufacturing_year, last_maintenance_date,
+			insurance_expiry, status, seat_layout_id, has_wifi, has_ac, has_charging_ports,
 			has_entertainment, has_refreshments, created_at, updated_at
 		FROM buses
 		WHERE id = $1
@@ -60,11 +60,12 @@ func (r *BusRepository) GetByID(busID string) (*models.Bus, error) {
 	var manufacturingYear sql.NullInt64
 	var lastMaintenanceDate sql.NullTime
 	var insuranceExpiry sql.NullTime
+	var seatLayoutID sql.NullString
 
 	err := r.db.QueryRow(query, busID).Scan(
 		&bus.ID, &bus.BusOwnerID, &bus.PermitID, &bus.BusNumber, &bus.LicensePlate,
-		&bus.BusType, &bus.TotalSeats, &manufacturingYear, &lastMaintenanceDate,
-		&insuranceExpiry, &bus.Status, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
+		&bus.BusType, &manufacturingYear, &lastMaintenanceDate,
+		&insuranceExpiry, &bus.Status, &seatLayoutID, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
 		&bus.HasEntertainment, &bus.HasRefreshments, &bus.CreatedAt, &bus.UpdatedAt,
 	)
 
@@ -83,6 +84,9 @@ func (r *BusRepository) GetByID(busID string) (*models.Bus, error) {
 	if insuranceExpiry.Valid {
 		bus.InsuranceExpiry = &insuranceExpiry.Time
 	}
+	if seatLayoutID.Valid {
+		bus.SeatLayoutID = &seatLayoutID.String
+	}
 
 	return bus, nil
 }
@@ -92,8 +96,8 @@ func (r *BusRepository) GetByOwnerID(busOwnerID string) ([]models.Bus, error) {
 	query := `
 		SELECT
 			id, bus_owner_id, permit_id, bus_number, license_plate,
-			bus_type, total_seats, manufacturing_year, last_maintenance_date,
-			insurance_expiry, status, has_wifi, has_ac, has_charging_ports,
+			bus_type, manufacturing_year, last_maintenance_date,
+			insurance_expiry, status, seat_layout_id, has_wifi, has_ac, has_charging_ports,
 			has_entertainment, has_refreshments, created_at, updated_at
 		FROM buses
 		WHERE bus_owner_id = $1
@@ -112,11 +116,12 @@ func (r *BusRepository) GetByOwnerID(busOwnerID string) ([]models.Bus, error) {
 		var manufacturingYear sql.NullInt64
 		var lastMaintenanceDate sql.NullTime
 		var insuranceExpiry sql.NullTime
+		var seatLayoutID sql.NullString
 
 		err := rows.Scan(
 			&bus.ID, &bus.BusOwnerID, &bus.PermitID, &bus.BusNumber, &bus.LicensePlate,
-			&bus.BusType, &bus.TotalSeats, &manufacturingYear, &lastMaintenanceDate,
-			&insuranceExpiry, &bus.Status, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
+			&bus.BusType, &manufacturingYear, &lastMaintenanceDate,
+			&insuranceExpiry, &bus.Status, &seatLayoutID, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
 			&bus.HasEntertainment, &bus.HasRefreshments, &bus.CreatedAt, &bus.UpdatedAt,
 		)
 		if err != nil {
@@ -134,6 +139,9 @@ func (r *BusRepository) GetByOwnerID(busOwnerID string) ([]models.Bus, error) {
 		if insuranceExpiry.Valid {
 			bus.InsuranceExpiry = &insuranceExpiry.Time
 		}
+		if seatLayoutID.Valid {
+			bus.SeatLayoutID = &seatLayoutID.String
+		}
 
 		buses = append(buses, bus)
 	}
@@ -146,8 +154,8 @@ func (r *BusRepository) GetByLicensePlate(licensePlate string) (*models.Bus, err
 	query := `
 		SELECT
 			id, bus_owner_id, permit_id, bus_number, license_plate,
-			bus_type, total_seats, manufacturing_year, last_maintenance_date,
-			insurance_expiry, status, has_wifi, has_ac, has_charging_ports,
+			bus_type, manufacturing_year, last_maintenance_date,
+			insurance_expiry, status, seat_layout_id, has_wifi, has_ac, has_charging_ports,
 			has_entertainment, has_refreshments, created_at, updated_at
 		FROM buses
 		WHERE license_plate = $1
@@ -157,11 +165,12 @@ func (r *BusRepository) GetByLicensePlate(licensePlate string) (*models.Bus, err
 	var manufacturingYear sql.NullInt64
 	var lastMaintenanceDate sql.NullTime
 	var insuranceExpiry sql.NullTime
+	var seatLayoutID sql.NullString
 
 	err := r.db.QueryRow(query, licensePlate).Scan(
 		&bus.ID, &bus.BusOwnerID, &bus.PermitID, &bus.BusNumber, &bus.LicensePlate,
-		&bus.BusType, &bus.TotalSeats, &manufacturingYear, &lastMaintenanceDate,
-		&insuranceExpiry, &bus.Status, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
+		&bus.BusType, &manufacturingYear, &lastMaintenanceDate,
+		&insuranceExpiry, &bus.Status, &seatLayoutID, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
 		&bus.HasEntertainment, &bus.HasRefreshments, &bus.CreatedAt, &bus.UpdatedAt,
 	)
 
@@ -183,6 +192,9 @@ func (r *BusRepository) GetByLicensePlate(licensePlate string) (*models.Bus, err
 	if insuranceExpiry.Valid {
 		bus.InsuranceExpiry = &insuranceExpiry.Time
 	}
+	if seatLayoutID.Valid {
+		bus.SeatLayoutID = &seatLayoutID.String
+	}
 
 	return bus, nil
 }
@@ -202,12 +214,6 @@ func (r *BusRepository) Update(busID string, req *models.UpdateBusRequest) error
 	if req.BusType != nil {
 		updates = append(updates, fmt.Sprintf("bus_type = $%d", argCount))
 		args = append(args, *req.BusType)
-		argCount++
-	}
-
-	if req.TotalSeats != nil {
-		updates = append(updates, fmt.Sprintf("total_seats = $%d", argCount))
-		args = append(args, *req.TotalSeats)
 		argCount++
 	}
 
@@ -273,6 +279,12 @@ func (r *BusRepository) Update(busID string, req *models.UpdateBusRequest) error
 		argCount++
 	}
 
+	if req.SeatLayoutID != nil {
+		updates = append(updates, fmt.Sprintf("seat_layout_id = $%d", argCount))
+		args = append(args, *req.SeatLayoutID)
+		argCount++
+	}
+
 	if len(updates) == 0 {
 		return fmt.Errorf("no fields to update")
 	}
@@ -318,8 +330,8 @@ func (r *BusRepository) GetByPermitID(permitID string) (*models.Bus, error) {
 	query := `
 		SELECT
 			id, bus_owner_id, permit_id, bus_number, license_plate,
-			bus_type, total_seats, manufacturing_year, last_maintenance_date,
-			insurance_expiry, status, has_wifi, has_ac, has_charging_ports,
+			bus_type, manufacturing_year, last_maintenance_date,
+			insurance_expiry, status, seat_layout_id, has_wifi, has_ac, has_charging_ports,
 			has_entertainment, has_refreshments, created_at, updated_at
 		FROM buses
 		WHERE permit_id = $1
@@ -329,11 +341,12 @@ func (r *BusRepository) GetByPermitID(permitID string) (*models.Bus, error) {
 	var manufacturingYear sql.NullInt64
 	var lastMaintenanceDate sql.NullTime
 	var insuranceExpiry sql.NullTime
+	var seatLayoutID sql.NullString
 
 	err := r.db.QueryRow(query, permitID).Scan(
 		&bus.ID, &bus.BusOwnerID, &bus.PermitID, &bus.BusNumber, &bus.LicensePlate,
-		&bus.BusType, &bus.TotalSeats, &manufacturingYear, &lastMaintenanceDate,
-		&insuranceExpiry, &bus.Status, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
+		&bus.BusType, &manufacturingYear, &lastMaintenanceDate,
+		&insuranceExpiry, &bus.Status, &seatLayoutID, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
 		&bus.HasEntertainment, &bus.HasRefreshments, &bus.CreatedAt, &bus.UpdatedAt,
 	)
 
@@ -355,6 +368,9 @@ func (r *BusRepository) GetByPermitID(permitID string) (*models.Bus, error) {
 	if insuranceExpiry.Valid {
 		bus.InsuranceExpiry = &insuranceExpiry.Time
 	}
+	if seatLayoutID.Valid {
+		bus.SeatLayoutID = &seatLayoutID.String
+	}
 
 	return bus, nil
 }
@@ -364,8 +380,8 @@ func (r *BusRepository) GetByStatus(busOwnerID string, status string) ([]models.
 	query := `
 		SELECT
 			id, bus_owner_id, permit_id, bus_number, license_plate,
-			bus_type, total_seats, manufacturing_year, last_maintenance_date,
-			insurance_expiry, status, has_wifi, has_ac, has_charging_ports,
+			bus_type, manufacturing_year, last_maintenance_date,
+			insurance_expiry, status, seat_layout_id, has_wifi, has_ac, has_charging_ports,
 			has_entertainment, has_refreshments, created_at, updated_at
 		FROM buses
 		WHERE bus_owner_id = $1 AND status = $2
@@ -384,11 +400,12 @@ func (r *BusRepository) GetByStatus(busOwnerID string, status string) ([]models.
 		var manufacturingYear sql.NullInt64
 		var lastMaintenanceDate sql.NullTime
 		var insuranceExpiry sql.NullTime
+		var seatLayoutID sql.NullString
 
 		err := rows.Scan(
 			&bus.ID, &bus.BusOwnerID, &bus.PermitID, &bus.BusNumber, &bus.LicensePlate,
-			&bus.BusType, &bus.TotalSeats, &manufacturingYear, &lastMaintenanceDate,
-			&insuranceExpiry, &bus.Status, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
+			&bus.BusType, &manufacturingYear, &lastMaintenanceDate,
+			&insuranceExpiry, &bus.Status, &seatLayoutID, &bus.HasWifi, &bus.HasAC, &bus.HasChargingPorts,
 			&bus.HasEntertainment, &bus.HasRefreshments, &bus.CreatedAt, &bus.UpdatedAt,
 		)
 		if err != nil {
@@ -405,6 +422,9 @@ func (r *BusRepository) GetByStatus(busOwnerID string, status string) ([]models.
 		}
 		if insuranceExpiry.Valid {
 			bus.InsuranceExpiry = &insuranceExpiry.Time
+		}
+		if seatLayoutID.Valid {
+			bus.SeatLayoutID = &seatLayoutID.String
 		}
 
 		buses = append(buses, bus)

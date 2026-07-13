@@ -35,6 +35,30 @@ type Config struct {
 
 	// Security configuration
 	Security SecurityConfig
+
+	// Payment gateway configuration
+	Payment PaymentConfig
+
+	// Cloudinary configuration
+	CloudinaryURL string
+
+	// OneSignal Configuration
+
+	// OneSignal App ID
+	OneSignalAppID string
+
+	// OneSignal REST API Key
+	OneSignalRestAPIKey string
+}
+
+// PaymentConfig holds PAYable IPG configuration
+type PaymentConfig struct {
+	Environment   string // "sandbox" or "production"
+	MerchantKey   string // PAYable merchant key
+	MerchantToken string // PAYable merchant token (SECRET - never expose to client)
+	LogoURL       string // Merchant logo URL for payment page
+	ReturnURL     string // URL to redirect after payment (app deep link)
+	WebhookURL    string // Server webhook URL for payment notifications
 }
 
 // ServerConfig holds server-related configuration
@@ -164,6 +188,17 @@ func Load() (*Config, error) {
 			EnableRequestLog: getEnvAsBool("ENABLE_REQUEST_LOGGING", true),
 			EnableAuditLog:   getEnvAsBool("ENABLE_AUDIT_LOGGING", true),
 		},
+		Payment: PaymentConfig{
+			Environment:   getEnv("PAYABLE_ENVIRONMENT", "sandbox"),
+			MerchantKey:   getEnv("PAYABLE_MERCHANT_KEY", ""),
+			MerchantToken: getEnv("PAYABLE_MERCHANT_TOKEN", ""),
+			LogoURL:       getEnv("PAYABLE_LOGO_URL", ""),
+			ReturnURL:     getEnv("PAYABLE_RETURN_URL", ""),
+			WebhookURL:    getEnv("PAYABLE_WEBHOOK_URL", ""),
+		},
+		CloudinaryURL:       getEnv("CLOUDINARY_URL", ""),
+		OneSignalAppID:      getEnv("ONESIGNAL_APP_ID", ""),
+		OneSignalRestAPIKey: getEnv("ONESIGNAL_REST_API_KEY", ""),
 	}
 
 	// Validate required configuration

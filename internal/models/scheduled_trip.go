@@ -18,51 +18,71 @@ const (
 
 // ScheduledTrip represents a specific trip instance generated from a schedule or created as a special trip
 type ScheduledTrip struct {
-	ID                   string              `json:"id" db:"id"`
-	TripScheduleID       *string             `json:"trip_schedule_id,omitempty" db:"trip_schedule_id"` // Nullable for special trips
-	CustomRouteID        *string             `json:"custom_route_id,omitempty" db:"custom_route_id"`   // NEW: Reference to custom route
-	PermitID             string              `json:"permit_id" db:"permit_id"`
-	BusID                *string             `json:"bus_id,omitempty" db:"bus_id"`
-	TripDate             time.Time           `json:"trip_date" db:"trip_date"`
-	DepartureTime        string              `json:"departure_time" db:"departure_time"`
-	EstimatedArrivalTime *string             `json:"estimated_arrival_time,omitempty" db:"estimated_arrival_time"`
-	AssignedDriverID     *string             `json:"assigned_driver_id,omitempty" db:"assigned_driver_id"`
-	AssignedConductorID  *string             `json:"assigned_conductor_id,omitempty" db:"assigned_conductor_id"`
-	IsBookable           bool                `json:"is_bookable" db:"is_bookable"`
-	TotalSeats           int                 `json:"total_seats" db:"total_seats"`
-	AvailableSeats       int                 `json:"available_seats" db:"available_seats"`
-	BookedSeats          int                 `json:"booked_seats" db:"booked_seats"`
-	BaseFare             float64             `json:"base_fare" db:"base_fare"`
-	BookingAdvanceHours  int                 `json:"booking_advance_hours" db:"booking_advance_hours"` // NEW: Hours before trip that booking opens
-	AssignmentDeadline   *time.Time          `json:"assignment_deadline,omitempty" db:"assignment_deadline"` // NEW: Deadline to assign resources
-	Status               ScheduledTripStatus `json:"status" db:"status"`
-	CancellationReason   *string             `json:"cancellation_reason,omitempty" db:"cancellation_reason"`
-	CancelledAt          *time.Time          `json:"cancelled_at,omitempty" db:"cancelled_at"`
-	SelectedStopIDs      UUIDArray           `json:"selected_stop_ids,omitempty" db:"selected_stop_ids"`
-	CreatedAt            time.Time           `json:"created_at" db:"created_at"`
-	UpdatedAt            time.Time           `json:"updated_at" db:"updated_at"`
+	ID                       string    `json:"id" db:"id"`
+	TripScheduleID           *string   `json:"trip_schedule_id,omitempty" db:"trip_schedule_id"`     // Nullable for special trips
+	BusOwnerRouteID          *string   `json:"bus_owner_route_id,omitempty" db:"bus_owner_route_id"` // Optional route override - inherits from schedule if NULL
+	PermitID                 *string   `json:"permit_id,omitempty" db:"permit_id"`                   // Nullable - assigned later
+	BusID                    *string   `json:"bus_id,omitempty" db:"bus_id"`
+	DepartureDatetime        time.Time `json:"departure_datetime" db:"departure_datetime"`                           // Specific departure date and time (e.g., 2025-11-20 22:00:00)
+	EstimatedDurationMinutes *int      `json:"estimated_duration_minutes,omitempty" db:"estimated_duration_minutes"` // Duration in minutes (industry standard - calculate arrival on-the-fly)
+	AssignedDriverID         *string   `json:"assigned_driver_id,omitempty" db:"assigned_driver_id"`
+	AssignedConductorID      *string   `json:"assigned_conductor_id,omitempty" db:"assigned_conductor_id"`
+	SeatLayoutID             *string   `json:"seat_layout_id,omitempty" db:"seat_layout_id"` // Required before trip can be published for booking
+	IsBookable               bool      `json:"is_bookable" db:"is_bookable"`                 // Controls if trip is available for passenger booking
+	EverPublished            bool      `json:"ever_published" db:"ever_published"`           // Tracks if trip was ever made bookable (stays true once set)
+	TotalSeats               int       `json:"total_seats" db:"total_seats"`
+	// AvailableSeats and BookedSeats removed - will be calculated from separate booking tables
+	BaseFare            float64             `json:"base_fare" db:"base_fare"`
+	BookingAdvanceHours int                 `json:"booking_advance_hours" db:"booking_advance_hours"`       // NEW: Hours before trip that booking opens
+	AssignmentDeadline  *time.Time          `json:"assignment_deadline,omitempty" db:"assignment_deadline"` // NEW: Deadline to assign resources
+	Status              ScheduledTripStatus `json:"status" db:"status"`
+	CancellationReason  *string             `json:"cancellation_reason,omitempty" db:"cancellation_reason"`
+	CancelledAt         *time.Time          `json:"cancelled_at,omitempty" db:"cancelled_at"`
+	SelectedStopIDs     UUIDArray           `json:"selected_stop_ids,omitempty" db:"selected_stop_ids"`
+	CreatedAt           time.Time           `json:"created_at" db:"created_at"`
+	UpdatedAt           time.Time           `json:"updated_at" db:"updated_at"`
+}
+
+// GetArrivalDatetime calculates arrival datetime (industry standard approach)
+// Always calculates from departure + duration (no stored arrival time)
+func (t *ScheduledTrip) GetArrivalDatetime() *time.Time {
+	if t.EstimatedDurationMinutes == nil {
+		return nil // No duration = can't calculate arrival
+	}
+	arrival := t.DepartureDatetime.Add(time.Duration(*t.EstimatedDurationMinutes) * time.Minute)
+	return &arrival
+}
+
+// IsOvernight checks if trip crosses midnight
+func (t *ScheduledTrip) IsOvernight() bool {
+	arrival := t.GetArrivalDatetime()
+	if arrival == nil {
+		return false
+	}
+	return arrival.Day() != t.DepartureDatetime.Day() ||
+		arrival.Month() != t.DepartureDatetime.Month() ||
+		arrival.Year() != t.DepartureDatetime.Year()
 }
 
 // CreateScheduledTripRequest represents the request to manually create a scheduled trip
 type CreateScheduledTripRequest struct {
 	TripScheduleID      string  `json:"trip_schedule_id" binding:"required"`
 	BusID               *string `json:"bus_id,omitempty"`
-	TripDate            string  `json:"trip_date" binding:"required"`
+	DepartureDatetime   string  `json:"departure_datetime" binding:"required"` // ISO 8601 datetime
 	AssignedDriverID    *string `json:"assigned_driver_id,omitempty"`
 	AssignedConductorID *string `json:"assigned_conductor_id,omitempty"`
 }
 
 // CreateSpecialTripRequest represents the request to create a special one-time trip (no timetable)
 type CreateSpecialTripRequest struct {
-	CustomRouteID        string  `json:"custom_route_id" binding:"required"`
-	PermitID             string  `json:"permit_id" binding:"required"`
-	TripDate             string  `json:"trip_date" binding:"required"`              // YYYY-MM-DD
-	DepartureTime        string  `json:"departure_time" binding:"required"`         // HH:MM or HH:MM:SS
-	EstimatedArrivalTime *string `json:"estimated_arrival_time,omitempty"`         // HH:MM or HH:MM:SS
-	BaseFare             float64 `json:"base_fare" binding:"required,gt=0"`
-	MaxBookableSeats     int     `json:"max_bookable_seats" binding:"required,gt=0"`
-	IsBookable           bool    `json:"is_bookable"`
-	BookingAdvanceHours  *int    `json:"booking_advance_hours,omitempty"` // NULL = use system default (72)
+	CustomRouteID            string  `json:"custom_route_id" binding:"required"`
+	PermitID                 *string `json:"permit_id,omitempty"`                   // Changed to pointer for nullable
+	DepartureDatetime        string  `json:"departure_datetime" binding:"required"` // ISO 8601 datetime: 2025-11-20T22:00:00Z or 2025-11-20 22:00:00
+	EstimatedDurationMinutes *int    `json:"estimated_duration_minutes,omitempty"`  // Duration in minutes (optional, for calculating arrival)
+	BaseFare                 float64 `json:"base_fare" binding:"required,gt=0"`
+	MaxBookableSeats         int     `json:"max_bookable_seats" binding:"required,gt=0"`
+	IsBookable               bool    `json:"is_bookable"`
+	BookingAdvanceHours      *int    `json:"booking_advance_hours,omitempty"` // NULL = use system default (72)
 	// Resource assignment (required if trip is soon)
 	BusID               *string `json:"bus_id,omitempty"`
 	AssignedDriverID    *string `json:"assigned_driver_id,omitempty"`
@@ -71,30 +91,36 @@ type CreateSpecialTripRequest struct {
 
 // Validate validates the create special trip request
 func (r *CreateSpecialTripRequest) Validate() error {
-	// Validate trip date
-	tripDate, err := time.Parse("2006-01-02", r.TripDate)
+	// Validate departure_datetime format (supports multiple formats)
+	var departureDatetime time.Time
+	var err error
+
+	// Try ISO 8601 with timezone
+	departureDatetime, err = time.Parse(time.RFC3339, r.DepartureDatetime)
 	if err != nil {
-		return errors.New("trip_date must be in YYYY-MM-DD format")
-	}
-
-	// Validate trip date is not in the past
-	if tripDate.Before(time.Now().Truncate(24 * time.Hour)) {
-		return errors.New("trip_date cannot be in the past")
-	}
-
-	// Validate departure time format (HH:MM or HH:MM:SS)
-	if _, err := time.Parse("15:04", r.DepartureTime); err != nil {
-		if _, err := time.Parse("15:04:05", r.DepartureTime); err != nil {
-			return errors.New("departure_time must be in HH:MM or HH:MM:SS format")
+		// Try common datetime format without timezone
+		departureDatetime, err = time.Parse("2006-01-02 15:04:05", r.DepartureDatetime)
+		if err != nil {
+			// Try with T separator
+			departureDatetime, err = time.Parse("2006-01-02T15:04:05", r.DepartureDatetime)
+			if err != nil {
+				return errors.New("departure_datetime must be in ISO 8601 format (e.g., 2025-11-20T22:00:00Z or 2025-11-20 22:00:00)")
+			}
 		}
 	}
 
-	// Validate estimated arrival time format if provided
-	if r.EstimatedArrivalTime != nil {
-		if _, err := time.Parse("15:04", *r.EstimatedArrivalTime); err != nil {
-			if _, err := time.Parse("15:04:05", *r.EstimatedArrivalTime); err != nil {
-				return errors.New("estimated_arrival_time must be in HH:MM or HH:MM:SS format")
-			}
+	// Validate departure datetime is not in the past
+	if departureDatetime.Before(time.Now()) {
+		return errors.New("departure_datetime cannot be in the past")
+	}
+
+	// Validate duration if provided
+	if r.EstimatedDurationMinutes != nil {
+		if *r.EstimatedDurationMinutes <= 0 {
+			return errors.New("estimated_duration_minutes must be greater than 0")
+		}
+		if *r.EstimatedDurationMinutes > 2880 {
+			return errors.New("estimated_duration_minutes cannot exceed 2880 minutes (48 hours)")
 		}
 	}
 
@@ -108,6 +134,7 @@ func (r *CreateSpecialTripRequest) Validate() error {
 
 // UpdateScheduledTripRequest represents the request to update a scheduled trip
 type UpdateScheduledTripRequest struct {
+	BusOwnerRouteID     *string `json:"bus_owner_route_id,omitempty"` // Optional route override
 	BusID               *string `json:"bus_id,omitempty"`
 	AssignedDriverID    *string `json:"assigned_driver_id,omitempty"`
 	AssignedConductorID *string `json:"assigned_conductor_id,omitempty"`
@@ -117,9 +144,17 @@ type UpdateScheduledTripRequest struct {
 
 // Validate validates the create scheduled trip request
 func (r *CreateScheduledTripRequest) Validate() error {
-	// Validate trip date
-	if _, err := time.Parse("2006-01-02", r.TripDate); err != nil {
-		return errors.New("trip_date must be in YYYY-MM-DD format")
+	// Validate departure_datetime format
+	var err error
+	_, err = time.Parse(time.RFC3339, r.DepartureDatetime)
+	if err != nil {
+		_, err = time.Parse("2006-01-02 15:04:05", r.DepartureDatetime)
+		if err != nil {
+			_, err = time.Parse("2006-01-02T15:04:05", r.DepartureDatetime)
+			if err != nil {
+				return errors.New("departure_datetime must be in ISO 8601 format")
+			}
+		}
 	}
 
 	return nil
@@ -133,32 +168,11 @@ func (s *ScheduledTrip) CanBeCancelled() bool {
 // IsPastDeparture checks if the trip departure time has passed
 func (s *ScheduledTrip) IsPastDeparture() bool {
 	now := time.Now()
-
-	// Combine trip date with departure time
-	departureTime, err := time.Parse("15:04:05", s.DepartureTime)
-	if err != nil {
-		// Try without seconds
-		departureTime, err = time.Parse("15:04", s.DepartureTime)
-		if err != nil {
-			return false
-		}
-	}
-
-	tripDateTime := time.Date(
-		s.TripDate.Year(),
-		s.TripDate.Month(),
-		s.TripDate.Day(),
-		departureTime.Hour(),
-		departureTime.Minute(),
-		departureTime.Second(),
-		0,
-		s.TripDate.Location(),
-	)
-
-	return now.After(tripDateTime)
+	return now.After(s.DepartureDatetime)
 }
 
 // CanAcceptBooking checks if the trip can accept new bookings
+// TODO: Update to check available seats from separate booking table
 func (s *ScheduledTrip) CanAcceptBooking(seats int) bool {
 	if !s.IsBookable {
 		return false
@@ -172,39 +186,59 @@ func (s *ScheduledTrip) CanAcceptBooking(seats int) bool {
 		return false
 	}
 
-	return s.AvailableSeats >= seats
+	// TODO: Query booking table to check if seats are available
+	return true // Temporary - needs to check actual bookings
 }
 
-// ReserveSeats reserves seats for a booking
-func (s *ScheduledTrip) ReserveSeats(seats int) error {
-	if !s.CanAcceptBooking(seats) {
-		return errors.New("trip cannot accept bookings")
-	}
+// ReserveSeats - DEPRECATED: Seats will be managed in separate booking table
+// func (s *ScheduledTrip) ReserveSeats(seats int) error {
+// 	// This method is no longer used - bookings are stored in separate table
+// 	return errors.New("method deprecated - use booking table")
+// }
 
-	s.BookedSeats += seats
-	s.AvailableSeats -= seats
+// ReleaseSeats - DEPRECATED: Seats will be managed in separate booking table
+// func (s *ScheduledTrip) ReleaseSeats(seats int) {
+// 	// This method is no longer used - bookings are stored in separate table
+// }
 
-	return nil
+// OccupancyPercentage - DEPRECATED: Will be calculated from booking table
+// func (s *ScheduledTrip) OccupancyPercentage() float64 {
+// 	// This will need to query booking table to calculate occupancy
+// 	return 0
+// }
+
+// ScheduledTripWithRouteInfo extends ScheduledTrip with route details
+type ScheduledTripWithRouteInfo struct {
+	ScheduledTrip
+	RouteNumber     *string `json:"route_number,omitempty"`
+	OriginCity      *string `json:"origin_city,omitempty"`
+	DestinationCity *string `json:"destination_city,omitempty"`
+	IsUpDirection   *bool   `json:"is_up_direction,omitempty"`
 }
 
-// ReleaseSeats releases seats from a cancelled booking
-func (s *ScheduledTrip) ReleaseSeats(seats int) {
-	s.BookedSeats -= seats
-	s.AvailableSeats += seats
-
-	// Ensure values don't go negative or exceed total
-	if s.BookedSeats < 0 {
-		s.BookedSeats = 0
-	}
-	if s.AvailableSeats > s.TotalSeats {
-		s.AvailableSeats = s.TotalSeats
-	}
+// StaffDetails contains basic staff information for trip display
+type StaffDetails struct {
+	ID            string  `json:"id"`
+	FirstName     string  `json:"first_name"`
+	LastName      string  `json:"last_name"`
+	Phone         string  `json:"phone"`
+	LicenseNumber *string `json:"license_number,omitempty"`
 }
 
-// OccupancyPercentage returns the percentage of booked seats
-func (s *ScheduledTrip) OccupancyPercentage() float64 {
-	if s.TotalSeats == 0 {
-		return 0
-	}
-	return float64(s.BookedSeats) / float64(s.TotalSeats) * 100
+// PermitDetails contains basic permit information for trip display
+type PermitDetails struct {
+	ID                    string `json:"id"`
+	PermitNumber          string `json:"permit_number"`
+	BusRegistrationNumber string `json:"bus_registration_number"`
+	RouteNumber           string `json:"route_number"`
+	OriginCity            string `json:"origin_city"`
+	DestinationCity       string `json:"destination_city"`
+}
+
+// ScheduledTripWithDetails extends ScheduledTrip with full assignment details
+type ScheduledTripWithDetails struct {
+	ScheduledTrip
+	Driver    *StaffDetails  `json:"driver,omitempty"`
+	Conductor *StaffDetails  `json:"conductor,omitempty"`
+	Permit    *PermitDetails `json:"permit,omitempty"`
 }
