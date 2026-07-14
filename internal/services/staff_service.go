@@ -451,8 +451,3 @@ func (s *StaffService) ApproveStaff(staffID, adminUserID string) error {
 
 	return nil
 }
-
-// stringPtr is a helper to create a pointer to a string
-func stringPtr(s string) *string {
-	return &s
-}

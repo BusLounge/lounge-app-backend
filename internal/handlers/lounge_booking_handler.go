@@ -169,10 +169,7 @@ func (h *LoungeBookingHandler) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	isAuthorized := false
-	if err == nil && owner != nil && lounge.LoungeOwnerID == owner.ID {
-		isAuthorized = true
-	}
+	isAuthorized := owner != nil && lounge.LoungeOwnerID == owner.ID
 
 	if !isAuthorized {
 		staff, staffErr := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
@@ -1293,7 +1290,8 @@ func (h *LoungeBookingHandler) ToggleBookingCheckInOut(c *gin.Context) {
 		"booking": updatedBooking,
 	}
 
-	if updatedBooking.Status == models.LoungeBookingStatusCheckedIn {
+	switch updatedBooking.Status {
+	case models.LoungeBookingStatusCheckedIn:
 		response["message"] = "Guest checked in successfully"
 		if req.Latitude != nil && req.Longitude != nil {
 			response["check_in_location"] = gin.H{
@@ -1303,7 +1301,7 @@ func (h *LoungeBookingHandler) ToggleBookingCheckInOut(c *gin.Context) {
 				"checked_in_at": updatedBooking.ActualArrival,
 			}
 		}
-	} else if updatedBooking.Status == "checked_out" {
+	case "checked_out":
 		response["message"] = "Guest checked out successfully"
 		if req.Latitude != nil && req.Longitude != nil {
 			response["check_out_location"] = gin.H{

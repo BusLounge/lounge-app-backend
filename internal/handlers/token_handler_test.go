@@ -55,9 +55,12 @@ func setupTokenTestHandler(db *sqlx.DB) (*AuthHandler, *jwt.Service) {
 	}
 
 	auditService := services.NewAuditService(nil)
+	notificationService := services.NewNotificationService(nil, database.NewUserSessionRepository(db), database.NewLoungeRepository(db), nil)
+	passengerRepository := database.NewPassengerRepository(db)
+	loungeRepository := database.NewLoungeRepository(db)
 	userSessionRepository := database.NewUserSessionRepository(db)
 
-	handler := NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, userRepository, refreshTokenRepository, userSessionRepository, smsGateway, cfg)
+	handler := NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, notificationService, userRepository, passengerRepository, refreshTokenRepository, userSessionRepository, smsGateway, cfg, loungeRepository)
 	return handler, jwtService
 }
 

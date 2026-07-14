@@ -211,7 +211,7 @@ func (s *BookingOrchestratorService) CreateIntent(
 // processBusIntent validates and processes bus intent, returns payload and fare
 func (s *BookingOrchestratorService) processBusIntent(
 	req *models.BusIntentRequest,
-	expiresAt time.Time,
+	_ time.Time,
 ) (*models.BusIntentPayload, float64, error) {
 	// 1. Get scheduled trip details
 	trip, err := s.scheduledTripRepo.GetByID(req.ScheduledTripID)
@@ -316,8 +316,8 @@ func (s *BookingOrchestratorService) processBusIntent(
 // processLoungeIntent validates and processes lounge intent, returns payload and fare
 func (s *BookingOrchestratorService) processLoungeIntent(
 	req *models.LoungeIntentRequest,
-	intentID uuid.UUID,
-	expiresAt time.Time,
+	_ uuid.UUID,
+	_ time.Time,
 	loungeType string, // "pre_trip" or "post_trip"
 ) (*models.LoungeIntentPayload, float64, error) {
 	// 1. Get lounge details
@@ -409,7 +409,7 @@ func (s *BookingOrchestratorService) createLoungeHold(
 	intentID uuid.UUID,
 	req *models.LoungeIntentRequest,
 	expiresAt time.Time,
-	loungeType string,
+	_ string,
 ) error {
 	loungeID, _ := uuid.Parse(req.LoungeID)
 	guestCount := len(req.Guests)
