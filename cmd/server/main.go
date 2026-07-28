@@ -450,20 +450,13 @@ func main() {
 	router.Use(requestLogger(logger))
 
 	// CORS configuration
-	allowedOrigins := cfg.CORS.AllowedOrigins
 	corsConfig := cors.Config{
+		AllowOrigins:     cfg.CORS.AllowedOrigins,
 		AllowMethods:     cfg.CORS.AllowedMethods,
 		AllowHeaders:     cfg.CORS.AllowedHeaders,
 		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: false, // Must be false when AllowAllOrigins/wildcard is used
+		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
-	}
-	// If wildcard is set, use AllowAllOrigins (compatible with browsers)
-	if len(allowedOrigins) == 1 && allowedOrigins[0] == "*" {
-		corsConfig.AllowAllOrigins = true
-	} else {
-		corsConfig.AllowOrigins = allowedOrigins
-		corsConfig.AllowCredentials = true
 	}
 	router.Use(cors.New(corsConfig))
 
