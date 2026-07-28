@@ -1,3 +1,9 @@
+//go:build ignore
+// +build ignore
+
+// Standalone utility script - run manually with: go run check_owner_status.go
+// This file is excluded from normal builds.
+
 package main
 
 import (
