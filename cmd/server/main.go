@@ -450,14 +450,24 @@ func main() {
 	router.Use(requestLogger(logger))
 
 	// CORS configuration
+	allowedOrigins := cfg.CORS.AllowedOrigins
 	corsConfig := cors.Config{
-		AllowOrigins:     cfg.CORS.AllowedOrigins,
 		AllowMethods:     cfg.CORS.AllowedMethods,
 		AllowHeaders:     cfg.CORS.AllowedHeaders,
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}
+
+	// Use AllowOriginFunc for wildcard to avoid panic with AllowCredentials=true
+	if len(allowedOrigins) == 1 && allowedOrigins[0] == "*" {
+		corsConfig.AllowOriginFunc = func(origin string) bool {
+			return true
+		}
+	} else {
+		corsConfig.AllowOrigins = allowedOrigins
+	}
+
 	router.Use(cors.New(corsConfig))
 
 	// Health check endpoint
