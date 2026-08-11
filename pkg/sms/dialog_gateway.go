@@ -69,7 +69,7 @@ type LoginResponse struct {
 	Token      string      `json:"token"`
 	Expiration int         `json:"expiration"` // Token expiry in seconds
 	UserData   interface{} `json:"userData"`
-	ErrCode    string      `json:"errCode"`
+	ErrCode    int      `json:"errCode"`
 }
 
 // SMSRecipient represents a single SMS recipient
@@ -98,7 +98,7 @@ type SendSMSResponse struct {
 		InvalidNumbers     int           `json:"invalidNumbers"`
 		MaskBlockedNumbers int           `json:"mask_blocked_numbers"`
 	} `json:"data"`
-	ErrCode string `json:"errCode"`
+	ErrCode int `json:"errCode"`
 }
 
 // CheckStatusRequest represents campaign status check request
