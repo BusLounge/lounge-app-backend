@@ -164,8 +164,10 @@ type LoungeProduct struct {
 	DiscountedPrice        *string                  `db:"discounted_price" json:"discounted_price,omitempty"` // Sale price
 	ImageURL               *string                  `db:"image_url" json:"image_url,omitempty"`
 	ThumbnailURL           *string                  `db:"thumbnail_url" json:"thumbnail_url,omitempty"`
+	InventoryItemID        *uuid.UUID               `db:"inventory_item_id" json:"inventory_item_id,omitempty"`
 	StockStatus            LoungeProductStockStatus `db:"stock_status" json:"stock_status"`
 	StockQuantity          *int                     `db:"stock_quantity" json:"stock_quantity,omitempty"` // Current stock level
+	ReorderLevel           *int                     `db:"reorder_level" json:"reorder_level,omitempty"`
 	IsAvailable            bool                     `db:"is_available" json:"is_available"`
 	IsPreOrderable         bool                     `db:"is_pre_orderable" json:"is_pre_orderable"`
 	AvailableFrom          *string                  `db:"available_from" json:"available_from,omitempty"`   // TIME

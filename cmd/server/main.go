@@ -301,6 +301,13 @@ func main() {
 	loungeSpecialPackageHandler := handlers.NewLoungeSpecialPackageHandler(loungeSpecialPackageRepo, loungeRepository, loungeOwnerRepository)
 	logger.Info("✓ Lounge special packages system initialized")
 
+	// Initialize Lounge Inventory system
+	logger.Info("Initializing lounge inventory system...")
+	inventoryRepo := database.NewInventoryRepository(sqlxDB.DB)
+	inventoryService := services.NewInventoryService(inventoryRepo)
+	inventoryHandler := handlers.NewInventoryHandler(inventoryService, loungeOwnerRepository, loungeRepository)
+	logger.Info("✓ Lounge inventory system initialized")
+
 	// Initialize Lounge Booking Driver Assignment system
 	logger.Info("Initializing lounge booking driver assignment system...")
 	loungeBookingDriverAssignmentRepo := database.NewLoungeBookingDriverAssignmentRepository(sqlxDB.DB)
@@ -866,6 +873,11 @@ func main() {
 			logger.Info("  ✅ DELETE /api/v1/marketplace/special-packages/:package_id (requires approval)")
 			v1.DELETE("/marketplace/special-packages/:package_id", middleware.AuthMiddleware(jwtService), middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeSpecialPackageHandler.DeleteSpecialPackage)
 
+			// Lounge Inventory (New Endpoints)
+			logger.Info("  ✅ GET /api/v1/lounges/:id/inventory/catalog (read-only, owner/staff)")
+			loungesProtectedProducts.GET("/:id/inventory/catalog", inventoryHandler.GetAvailableCatalog)
+			logger.Info("  ✅ POST /api/v1/lounges/:id/inventory (requires approval)")
+			loungesProtectedProducts.POST("/:id/inventory", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), inventoryHandler.AddInventoryItem)
 
 			// Bookings for a lounge (owner/staff view - read-only, no approval needed)
 			logger.Info("  ✅ GET /api/v1/lounges/:id/bookings (owner/staff, read-only)")
