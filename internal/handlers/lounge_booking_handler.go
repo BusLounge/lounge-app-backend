@@ -1057,62 +1057,108 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 	}
 
 	reference := c.Param("reference")
-	booking, err := h.bookingRepo.GetLoungeBookingByReference(reference)
-	if err != nil {
-		log.Printf("ERROR: Failed to get lounge booking by reference: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "database_error",
-			Message: "Failed to retrieve booking",
-		})
-		return
-	}
 
-	if booking == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "Booking not found",
-		})
-		return
-	}
+	var booking *models.LoungeBooking
+	var err error
 
-	// // Check ownership (COMMENTED FOR NEW ADDITIONS)
-	// if booking.UserID != userCtx.UserID {
-	// 	owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
-	// 	lounge, _ := h.loungeRepo.GetLoungeByID(booking.LoungeID)
-	// 	if owner == nil || lounge == nil || lounge.LoungeOwnerID != owner.ID {
-	// 		c.JSON(http.StatusForbidden, ErrorResponse{
-	// 			Error:   "forbidden",
-	// 			Message: "Not authorized to view this booking",
-	// 		})
-	// 		return
-	// 	}
-	// }
+	// Check if this is a master booking reference (starts with BL-)
+	if strings.HasPrefix(reference, "BL-") {
+		bookings, errMaster := h.bookingRepo.GetLoungeBookingsByMasterReference(reference)
+		if errMaster != nil {
+			log.Printf("ERROR: Failed to get lounge bookings by master reference: %v", errMaster)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "database_error",
+				Message: "Failed to retrieve bookings",
+			})
+			return
+		}
 
-	// Check ownership
-	if booking.UserID != userCtx.UserID {
-		// Check if user is lounge owner
-		owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
-		lounge, _ := h.loungeRepo.GetLoungeByID(booking.LoungeID)
+		if len(bookings) == 0 {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "Booking not found",
+			})
+			return
+		}
 
-		isOwner := owner != nil && lounge != nil && lounge.LoungeOwnerID == owner.ID
-
-		// ✅ ADD THIS: Check if user is approved & active staff
-		var isStaff bool
-		if !isOwner {
+		// Find the first booking the user has access to
+		for _, b := range bookings {
+			// Check ownership (passenger)
+			if b.UserID == userCtx.UserID {
+				booking = b
+				break
+			}
+			// Check if user is lounge owner
+			owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+			if owner != nil {
+				lounge, _ := h.loungeRepo.GetLoungeByID(b.LoungeID)
+				if lounge != nil && lounge.LoungeOwnerID == owner.ID {
+					booking = b
+					break
+				}
+			}
+			// Check if user is approved & active staff
 			staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
-			if staff != nil && staff.LoungeID == booking.LoungeID {
-				isStaff = true
+			if staff != nil && staff.LoungeID == b.LoungeID {
+				booking = b
+				break
 			}
 		}
 
-		if !isOwner && !isStaff {
+		if booking == nil {
 			c.JSON(http.StatusForbidden, ErrorResponse{
 				Error:   "forbidden",
 				Message: "Not authorized to view this booking",
 			})
 			return
 		}
+	} else {
+		// Single lounge booking reference
+		booking, err = h.bookingRepo.GetLoungeBookingByReference(reference)
+		if err != nil {
+			log.Printf("ERROR: Failed to get lounge booking by reference: %v", err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "database_error",
+				Message: "Failed to retrieve booking",
+			})
+			return
+		}
+
+		if booking == nil {
+			c.JSON(http.StatusNotFound, ErrorResponse{
+				Error:   "not_found",
+				Message: "Booking not found",
+			})
+			return
+		}
+
+		// Check ownership
+		if booking.UserID != userCtx.UserID {
+			// Check if user is lounge owner
+			owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+			lounge, _ := h.loungeRepo.GetLoungeByID(booking.LoungeID)
+
+			isOwner := owner != nil && lounge != nil && lounge.LoungeOwnerID == owner.ID
+
+			// Check if user is approved & active staff
+			var isStaff bool
+			if !isOwner {
+				staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
+				if staff != nil && staff.LoungeID == booking.LoungeID {
+					isStaff = true
+				}
+			}
+
+			if !isOwner && !isStaff {
+				c.JSON(http.StatusForbidden, ErrorResponse{
+					Error:   "forbidden",
+					Message: "Not authorized to view this booking",
+				})
+				return
+			}
+		}
 	}
+
 	c.JSON(http.StatusOK, booking)
 }
 

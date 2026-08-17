@@ -594,6 +594,33 @@ func (r *LoungeBookingRepository) GetLoungeBookingByReference(reference string) 
 	return r.GetLoungeBookingByID(bookingID)
 }
 
+// GetLoungeBookingsByMasterReference returns all lounge bookings for a given master booking reference (BL-...)
+func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterReference string) ([]*models.LoungeBooking, error) {
+	var bookingIDs []uuid.UUID
+	query := `
+		SELECT lb.id 
+		FROM lounge_bookings lb
+		JOIN bookings b ON lb.master_booking_id = b.id
+		WHERE b.booking_reference = $1
+	`
+	err := r.db.Select(&bookingIDs, query, masterReference)
+	if err != nil {
+		return nil, err
+	}
+
+	var bookings []*models.LoungeBooking
+	for _, id := range bookingIDs {
+		booking, err := r.GetLoungeBookingByID(id)
+		if err != nil {
+			return nil, err
+		}
+		if booking != nil {
+			bookings = append(bookings, booking)
+		}
+	}
+	return bookings, nil
+}
+
 // GetLoungeBookingByQRCode returns a booking by QR code data
 func (r *LoungeBookingRepository) GetLoungeBookingByQRCode(qrCodeData string) (*models.LoungeBooking, error) {
 	var bookingID uuid.UUID
