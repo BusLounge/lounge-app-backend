@@ -1061,35 +1061,15 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 	var booking *models.LoungeBooking
 	var err error
 
-	// Check if this is a master booking reference (starts with BL-)
-	if strings.HasPrefix(reference, "BL-") {
-		bookings, errMaster := h.bookingRepo.GetLoungeBookingsByMasterReference(reference)
-		if errMaster != nil {
-			log.Printf("ERROR: Failed to get lounge bookings by master reference: %v", errMaster)
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error:   "database_error",
-				Message: "Failed to retrieve bookings",
-			})
-			return
-		}
+	// Check if this is a master booking reference or UUID or fallback to master lookup
+	bookings, errMaster := h.bookingRepo.GetLoungeBookingsByMasterReference(reference)
+	if errMaster == nil && len(bookings) > 0 {
+		log.Printf("BACKEND: Found %d master bookings for reference %s", len(bookings), reference)
+		owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+		staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
 
-		if len(bookings) == 0 {
-			c.JSON(http.StatusNotFound, ErrorResponse{
-				Error:   "not_found",
-				Message: "Booking not found",
-			})
-			return
-		}
-
-		// Find the first booking the user has access to
+		// Prioritize matching the scanner's specific lounge (Owner or Staff)
 		for _, b := range bookings {
-			// Check ownership (passenger)
-			if b.UserID == userCtx.UserID {
-				booking = b
-				break
-			}
-			// Check if user is lounge owner
-			owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
 			if owner != nil {
 				lounge, _ := h.loungeRepo.GetLoungeByID(b.LoungeID)
 				if lounge != nil && lounge.LoungeOwnerID == owner.ID {
@@ -1097,11 +1077,19 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 					break
 				}
 			}
-			// Check if user is approved & active staff
-			staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
 			if staff != nil && staff.LoungeID == b.LoungeID {
 				booking = b
 				break
+			}
+		}
+
+		// Fallback to passenger ownership if not matched by lounge owner/staff
+		if booking == nil {
+			for _, b := range bookings {
+				if b.UserID == userCtx.UserID {
+					booking = b
+					break
+				}
 			}
 		}
 
@@ -1114,6 +1102,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 		}
 	} else {
 		// Single lounge booking reference
+		log.Printf("BACKEND: Getting lounge booking by specific reference: %s", reference)
 		booking, err = h.bookingRepo.GetLoungeBookingByReference(reference)
 		if err != nil {
 			log.Printf("ERROR: Failed to get lounge booking by reference: %v", err)
@@ -1134,13 +1123,11 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 
 		// Check ownership
 		if booking.UserID != userCtx.UserID {
-			// Check if user is lounge owner
 			owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
 			lounge, _ := h.loungeRepo.GetLoungeByID(booking.LoungeID)
 
 			isOwner := owner != nil && lounge != nil && lounge.LoungeOwnerID == owner.ID
 
-			// Check if user is approved & active staff
 			var isStaff bool
 			if !isOwner {
 				staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
@@ -1190,6 +1177,38 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 			Message: "Failed to retrieve booking",
 		})
 		return
+	}
+
+	if booking == nil {
+		// Fallback: Check if qrCodeData is a Master Booking Reference or Master UUID!
+		bookings, errMaster := h.bookingRepo.GetLoungeBookingsByMasterReference(qrCodeData)
+		if errMaster == nil && len(bookings) > 0 {
+			owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+			staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
+
+			for _, b := range bookings {
+				if owner != nil {
+					lounge, _ := h.loungeRepo.GetLoungeByID(b.LoungeID)
+					if lounge != nil && lounge.LoungeOwnerID == owner.ID {
+						booking = b
+						break
+					}
+				}
+				if staff != nil && staff.LoungeID == b.LoungeID {
+					booking = b
+					break
+				}
+			}
+
+			if booking == nil {
+				for _, b := range bookings {
+					if b.UserID == userCtx.UserID {
+						booking = b
+						break
+					}
+				}
+			}
+		}
 	}
 
 	if booking == nil {

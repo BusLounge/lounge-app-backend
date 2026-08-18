@@ -600,8 +600,8 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 	query := `
 		SELECT lb.id 
 		FROM lounge_bookings lb
-		JOIN bookings b ON lb.master_booking_id = b.id
-		WHERE b.booking_reference = $1
+		LEFT JOIN bookings b ON lb.master_booking_id = b.id
+		WHERE b.booking_reference = $1 OR b.id::text = $1 OR lb.master_booking_id::text = $1
 	`
 	err := r.db.Select(&bookingIDs, query, masterReference)
 	if err != nil {
