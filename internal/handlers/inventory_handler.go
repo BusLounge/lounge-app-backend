@@ -45,7 +45,7 @@ func (h *InventoryHandler) GetAvailableCatalog(c *gin.Context) {
 		return
 	}
 
-	userCtx, exists := middleware.GetUserContext(c)
+	_, exists := middleware.GetUserContext(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error:   "unauthorized",
@@ -54,25 +54,12 @@ func (h *InventoryHandler) GetAvailableCatalog(c *gin.Context) {
 		return
 	}
 
-	// Verify ownership (or staff access)
-	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	// Verify lounge exists
 	lounge, err := h.loungeRepo.GetLoungeByID(loungeID)
 	if err != nil || lounge == nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "not_found",
 			Message: "Lounge not found",
-		})
-		return
-	}
-
-	// Wait, since we don't have loungeStaffRepo in this handler, let's just use the owner check for now,
-	// or we can just assume if they made it past RequireApprovedLoungeOwner (or if not, we check owner here).
-	// Actually, the endpoints might be accessed by both, but the prompt said "Lounge Owner Add New Inventory Item flow".
-	isAuthorized := owner != nil && lounge.LoungeOwnerID == owner.ID
-	if !isAuthorized {
-		c.JSON(http.StatusForbidden, ErrorResponse{
-			Error:   "forbidden",
-			Message: "Not authorized to access this lounge",
 		})
 		return
 	}
