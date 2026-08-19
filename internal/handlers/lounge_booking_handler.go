@@ -1049,6 +1049,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByID(c *gin.Context) {
 func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 	userCtx, exists := middleware.GetUserContext(c)
 	if !exists {
+		log.Printf("[QR_ERROR] Unauthorized GET request: User context missing from gin context")
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error:   "unauthorized",
 			Message: "User context not found",
@@ -1057,6 +1058,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 	}
 
 	reference := c.Param("reference")
+	log.Printf("[QR_BACKEND_HANDLER] Received GetLoungeBookingByReference request -> parameter: '%s' | Authenticated UserID: %s", reference, userCtx.UserID)
 
 	var booking *models.LoungeBooking
 	var err error
@@ -1064,20 +1066,29 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 	// Check if this is a master booking reference or UUID or fallback to master lookup
 	bookings, errMaster := h.bookingRepo.GetLoungeBookingsByMasterReference(reference)
 	if errMaster == nil && len(bookings) > 0 {
-		log.Printf("BACKEND: Found %d master bookings for reference %s", len(bookings), reference)
+		log.Printf("[QR_BACKEND_HANDLER] Master reference lookup returned %d bookings for reference '%s'", len(bookings), reference)
 		owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
 		staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
+
+		if owner != nil {
+			log.Printf("[QR_BACKEND_HANDLER] Authenticated user is Lounge Owner (ID: %s)", owner.ID)
+		}
+		if staff != nil {
+			log.Printf("[QR_BACKEND_HANDLER] Authenticated user is Lounge Staff (ID: %s, LoungeID: %s)", staff.ID, staff.LoungeID)
+		}
 
 		// Prioritize matching the scanner's specific lounge (Owner or Staff)
 		for _, b := range bookings {
 			if owner != nil {
 				lounge, _ := h.loungeRepo.GetLoungeByID(b.LoungeID)
 				if lounge != nil && lounge.LoungeOwnerID == owner.ID {
+					log.Printf("[QR_BACKEND_HANDLER] ✅ ISOLATION MATCH (Owner): Booking ID %s matches lounge owned by user (%s)", b.ID, b.LoungeID)
 					booking = b
 					break
 				}
 			}
 			if staff != nil && staff.LoungeID == b.LoungeID {
+				log.Printf("[QR_BACKEND_HANDLER] ✅ ISOLATION MATCH (Staff): Booking ID %s matches staff assigned lounge (%s)", b.ID, b.LoungeID)
 				booking = b
 				break
 			}
@@ -1085,8 +1096,10 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 
 		// Fallback to passenger ownership if not matched by lounge owner/staff
 		if booking == nil {
+			log.Printf("[QR_BACKEND_HANDLER] No staff/owner lounge match found among master bookings. Checking passenger ownership...")
 			for _, b := range bookings {
 				if b.UserID == userCtx.UserID {
+					log.Printf("[QR_BACKEND_HANDLER] ✅ ISOLATION MATCH (Passenger): Booking ID %s matches passenger user ID", b.ID)
 					booking = b
 					break
 				}
@@ -1094,6 +1107,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 		}
 
 		if booking == nil {
+			log.Printf("[QR_ERROR] ⛔ FORBIDDEN: User %s does not own or staff any lounge in this master booking reference '%s'", userCtx.UserID, reference)
 			c.JSON(http.StatusForbidden, ErrorResponse{
 				Error:   "forbidden",
 				Message: "Not authorized to view this booking",
@@ -1102,10 +1116,10 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 		}
 	} else {
 		// Single lounge booking reference
-		log.Printf("BACKEND: Getting lounge booking by specific reference: %s", reference)
+		log.Printf("[QR_BACKEND_HANDLER] Querying database by specific reference: '%s'", reference)
 		booking, err = h.bookingRepo.GetLoungeBookingByReference(reference)
 		if err != nil {
-			log.Printf("ERROR: Failed to get lounge booking by reference: %v", err)
+			log.Printf("[QR_ERROR] Database error fetching booking by reference '%s': %v", reference, err)
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Error:   "database_error",
 				Message: "Failed to retrieve booking",
@@ -1114,6 +1128,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 		}
 
 		if booking == nil {
+			log.Printf("[QR_ERROR] 🔍 NOT FOUND: No booking record matches reference '%s'", reference)
 			c.JSON(http.StatusNotFound, ErrorResponse{
 				Error:   "not_found",
 				Message: "Booking not found",
@@ -1137,6 +1152,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 			}
 
 			if !isOwner && !isStaff {
+				log.Printf("[QR_ERROR] ⛔ FORBIDDEN: User %s is not owner, staff, or passenger for lounge booking %s", userCtx.UserID, booking.ID)
 				c.JSON(http.StatusForbidden, ErrorResponse{
 					Error:   "forbidden",
 					Message: "Not authorized to view this booking",
@@ -1146,6 +1162,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 		}
 	}
 
+	log.Printf("[QR_BACKEND_HANDLER] ✅ HTTP 200 OK -> Successfully returning lounge booking %s (Ref: %s, LoungeID: %s)", booking.ID, booking.BookingReference, booking.LoungeID)
 	c.JSON(http.StatusOK, booking)
 }
 
@@ -1153,6 +1170,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 	userCtx, exists := middleware.GetUserContext(c)
 	if !exists {
+		log.Printf("[QR_ERROR] Unauthorized GET request: User context missing from gin context")
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Error:   "unauthorized",
 			Message: "User context not found",
@@ -1162,6 +1180,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 
 	qrCodeData := c.Param("qr_code_data")
 	if qrCodeData == "" {
+		log.Printf("[QR_ERROR] Validation error: Missing qr_code_data parameter")
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "validation_error",
 			Message: "QR code data is required",
@@ -1169,9 +1188,11 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 		return
 	}
 
+	log.Printf("[QR_BACKEND_HANDLER] Received GetLoungeBookingByQRCode request -> Parameter: '%s' | UserID: %s", qrCodeData, userCtx.UserID)
+
 	booking, err := h.bookingRepo.GetLoungeBookingByQRCode(qrCodeData)
 	if err != nil {
-		log.Printf("ERROR: Failed to get lounge booking by QR code: %v", err)
+		log.Printf("[QR_ERROR] Database error fetching booking by qr_code_data '%s': %v", qrCodeData, err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "database_error",
 			Message: "Failed to retrieve booking",
@@ -1180,9 +1201,11 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 	}
 
 	if booking == nil {
+		log.Printf("[QR_BACKEND_HANDLER] Direct qr_code_data lookup returned nil. Attempting fallback master reference lookup for parameter: '%s'", qrCodeData)
 		// Fallback: Check if qrCodeData is a Master Booking Reference or Master UUID!
 		bookings, errMaster := h.bookingRepo.GetLoungeBookingsByMasterReference(qrCodeData)
 		if errMaster == nil && len(bookings) > 0 {
+			log.Printf("[QR_BACKEND_HANDLER] Fallback master reference lookup returned %d bookings", len(bookings))
 			owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
 			staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
 
@@ -1190,11 +1213,13 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 				if owner != nil {
 					lounge, _ := h.loungeRepo.GetLoungeByID(b.LoungeID)
 					if lounge != nil && lounge.LoungeOwnerID == owner.ID {
+						log.Printf("[QR_BACKEND_HANDLER] ✅ ISOLATION MATCH (Owner Fallback): Booking %s for lounge %s", b.ID, b.LoungeID)
 						booking = b
 						break
 					}
 				}
 				if staff != nil && staff.LoungeID == b.LoungeID {
+					log.Printf("[QR_BACKEND_HANDLER] ✅ ISOLATION MATCH (Staff Fallback): Booking %s for lounge %s", b.ID, b.LoungeID)
 					booking = b
 					break
 				}
@@ -1203,6 +1228,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 			if booking == nil {
 				for _, b := range bookings {
 					if b.UserID == userCtx.UserID {
+						log.Printf("[QR_BACKEND_HANDLER] ✅ ISOLATION MATCH (Passenger Fallback): Booking %s", b.ID)
 						booking = b
 						break
 					}
@@ -1212,6 +1238,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 	}
 
 	if booking == nil {
+		log.Printf("[QR_ERROR] 🔍 NOT FOUND: No booking found for qr_code_data or master reference: '%s'", qrCodeData)
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "not_found",
 			Message: "Booking not found",
@@ -1235,6 +1262,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 		}
 
 		if !isOwner && !isStaff {
+			log.Printf("[QR_ERROR] ⛔ FORBIDDEN: User %s is not authorized to view booking %s (LoungeID: %s)", userCtx.UserID, booking.ID, booking.LoungeID)
 			c.JSON(http.StatusForbidden, ErrorResponse{
 				Error:   "forbidden",
 				Message: "Not authorized to view this booking",
@@ -1243,6 +1271,7 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 		}
 	}
 
+	log.Printf("[QR_BACKEND_HANDLER] ✅ HTTP 200 OK -> Returning lounge booking %s for QR request", booking.ID)
 	c.JSON(http.StatusOK, booking)
 }
 

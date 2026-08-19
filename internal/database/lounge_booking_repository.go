@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -596,6 +597,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingByReference(reference string) 
 
 // GetLoungeBookingsByMasterReference returns all lounge bookings for a given master booking reference (BL-...)
 func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterReference string) ([]*models.LoungeBooking, error) {
+	log.Printf("[QR_BACKEND_REPO] Executing GetLoungeBookingsByMasterReference query for parameter: %s", masterReference)
 	var bookingIDs []uuid.UUID
 	query := `
 		SELECT lb.id 
@@ -605,33 +607,42 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 	`
 	err := r.db.Select(&bookingIDs, query, masterReference)
 	if err != nil {
+		log.Printf("[QR_ERROR] Database query error in GetLoungeBookingsByMasterReference: %v", err)
 		return nil, err
 	}
+
+	log.Printf("[QR_BACKEND_REPO] Query returned %d lounge booking UUIDs for master reference: %s", len(bookingIDs), masterReference)
 
 	var bookings []*models.LoungeBooking
 	for _, id := range bookingIDs {
 		booking, err := r.GetLoungeBookingByID(id)
 		if err != nil {
+			log.Printf("[QR_ERROR] Error fetching full lounge booking record for ID %s: %v", id, err)
 			return nil, err
 		}
 		if booking != nil {
 			bookings = append(bookings, booking)
 		}
 	}
+	log.Printf("[QR_BACKEND_REPO] Successfully retrieved %d full LoungeBooking objects", len(bookings))
 	return bookings, nil
 }
 
 // GetLoungeBookingByQRCode returns a booking by QR code data
 func (r *LoungeBookingRepository) GetLoungeBookingByQRCode(qrCodeData string) (*models.LoungeBooking, error) {
+	log.Printf("[QR_BACKEND_REPO] Executing GetLoungeBookingByQRCode query for qr_code_data: %s", qrCodeData)
 	var bookingID uuid.UUID
 	query := `SELECT id FROM lounge_bookings WHERE qr_code_data = $1`
 	err := r.db.Get(&bookingID, query, qrCodeData)
 	if err == sql.ErrNoRows {
+		log.Printf("[QR_BACKEND_REPO] SQL sql.ErrNoRows: No lounge_booking record found for qr_code_data: %s", qrCodeData)
 		return nil, nil
 	}
 	if err != nil {
+		log.Printf("[QR_ERROR] Database query error in GetLoungeBookingByQRCode: %v", err)
 		return nil, err
 	}
+	log.Printf("[QR_BACKEND_REPO] Found matching lounge booking ID: %s", bookingID)
 	return r.GetLoungeBookingByID(bookingID)
 }
 
