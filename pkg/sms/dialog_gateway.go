@@ -69,7 +69,7 @@ type LoginResponse struct {
 	Token      string      `json:"token"`
 	Expiration int         `json:"expiration"` // Token expiry in seconds
 	UserData   interface{} `json:"userData"`
-	ErrCode    int      `json:"errCode"`
+	ErrCode    interface{} `json:"errCode"` // Dialog returns "" (string) on success, int on error
 }
 
 // SMSRecipient represents a single SMS recipient
@@ -98,7 +98,7 @@ type SendSMSResponse struct {
 		InvalidNumbers     int           `json:"invalidNumbers"`
 		MaskBlockedNumbers int           `json:"mask_blocked_numbers"`
 	} `json:"data"`
-	ErrCode int `json:"errCode"`
+	ErrCode interface{} `json:"errCode"` // Dialog returns "" (string) on success, int on error
 }
 
 // CheckStatusRequest represents campaign status check request
@@ -165,7 +165,7 @@ func (d *DialogGateway) GetAccessToken() error {
 	}
 
 	if loginResp.Status != "success" {
-		return fmt.Errorf("login failed: %s (error code: %d)", loginResp.Comment, loginResp.ErrCode)
+		return fmt.Errorf("login failed: %s (error code: %v)", loginResp.Comment, loginResp.ErrCode)
 	}
 
 	// Store token with expiry
@@ -335,9 +335,9 @@ func (d *DialogGateway) SendOTP(phone, otpCode, appType string) (int64, error) {
 	}
 
 	if smsResp.Status != "success" {
-		fmt.Printf("❌ Dialog API Error - Status: %s, Comment: %s, ErrCode: %d\n",
+		fmt.Printf("❌ Dialog API Error - Status: %s, Comment: %s, ErrCode: %v\n",
 			smsResp.Status, smsResp.Comment, smsResp.ErrCode)
-		return 0, fmt.Errorf("SMS sending failed: %s (error code: %d)", smsResp.Comment, smsResp.ErrCode)
+		return 0, fmt.Errorf("SMS sending failed: %s (error code: %v)", smsResp.Comment, smsResp.ErrCode)
 	}
 
 	fmt.Printf("✅ SMS sent successfully! Campaign ID: %d, Cost: %.2f\n",
@@ -404,7 +404,7 @@ func (d *DialogGateway) SendMessage(phone, message string) (int64, error) {
 	}
 
 	if smsResp.Status != "success" {
-		return 0, fmt.Errorf("SMS sending failed: %s (error code: %d)", smsResp.Comment, smsResp.ErrCode)
+		return 0, fmt.Errorf("SMS sending failed: %s (error code: %v)", smsResp.Comment, smsResp.ErrCode)
 	}
 
 	return transactionID, nil
@@ -532,7 +532,7 @@ func (d *DialogGateway) SendBulkSMS(phones []string, message string) (int64, err
 	}
 
 	if smsResp.Status != "success" {
-		return 0, fmt.Errorf("SMS sending failed: %s (error code: %d)", smsResp.Comment, smsResp.ErrCode)
+		return 0, fmt.Errorf("SMS sending failed: %s (error code: %v)", smsResp.Comment, smsResp.ErrCode)
 	}
 
 	return transactionID, nil
