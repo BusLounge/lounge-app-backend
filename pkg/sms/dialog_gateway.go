@@ -93,7 +93,7 @@ type SendSMSResponse struct {
 	Data    struct {
 		CampaignID         int           `json:"campaignId"`
 		CampaignCost       float64       `json:"campaignCost"`
-		WalletBalance      interface{} `json:"walletBalance"`
+		WalletBalance      FlexibleFloat `json:"walletBalance"`
 		DuplicatesRemoved  int           `json:"duplicatesRemoved"`
 		InvalidNumbers     int           `json:"invalidNumbers"`
 		MaskBlockedNumbers int           `json:"mask_blocked_numbers"`
