@@ -54,10 +54,27 @@ func (h *InventoryHandler) GetAvailableCatalog(c *gin.Context) {
 		return
 	}
 
-	// Verify ownership (or staff access)
-	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
-	lounge, err := h.loungeRepo.GetLoungeByID(loungeID)
-	if err != nil || lounge == nil {
+	// Verify ownership (or staff access) — handle each error independently
+	owner, ownerErr := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	if ownerErr != nil {
+		log.Printf("ERROR: Failed to get lounge owner for user %s: %v", userCtx.UserID, ownerErr)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to verify ownership",
+		})
+		return
+	}
+
+	lounge, loungeErr := h.loungeRepo.GetLoungeByID(loungeID)
+	if loungeErr != nil {
+		log.Printf("ERROR: Failed to get lounge %s: %v", loungeID, loungeErr)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to retrieve lounge",
+		})
+		return
+	}
+	if lounge == nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "not_found",
 			Message: "Lounge not found",
@@ -65,11 +82,10 @@ func (h *InventoryHandler) GetAvailableCatalog(c *gin.Context) {
 		return
 	}
 
-	// Wait, since we don't have loungeStaffRepo in this handler, let's just use the owner check for now,
-	// or we can just assume if they made it past RequireApprovedLoungeOwner (or if not, we check owner here).
-	// Actually, the endpoints might be accessed by both, but the prompt said "Lounge Owner Add New Inventory Item flow".
 	isAuthorized := owner != nil && lounge.LoungeOwnerID == owner.ID
 	if !isAuthorized {
+		log.Printf("WARN: Catalog access denied — userID=%s, ownerID=%v, loungeOwnerID=%s",
+			userCtx.UserID, owner, lounge.LoungeOwnerID)
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Error:   "forbidden",
 			Message: "Not authorized to access this lounge",
@@ -89,6 +105,8 @@ func (h *InventoryHandler) GetAvailableCatalog(c *gin.Context) {
 		})
 		return
 	}
+
+	log.Printf("INFO: Catalog for lounge %s returned %d items", loungeID, len(items))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -117,10 +135,27 @@ func (h *InventoryHandler) AddInventoryItem(c *gin.Context) {
 		return
 	}
 
-	// Verify ownership
-	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
-	lounge, err := h.loungeRepo.GetLoungeByID(loungeID)
-	if err != nil || lounge == nil {
+	// Verify ownership — handle each error independently
+	owner, ownerErr := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	if ownerErr != nil {
+		log.Printf("ERROR: Failed to get lounge owner for user %s: %v", userCtx.UserID, ownerErr)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to verify ownership",
+		})
+		return
+	}
+
+	lounge, loungeErr := h.loungeRepo.GetLoungeByID(loungeID)
+	if loungeErr != nil {
+		log.Printf("ERROR: Failed to get lounge %s: %v", loungeID, loungeErr)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to retrieve lounge",
+		})
+		return
+	}
+	if lounge == nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "not_found",
 			Message: "Lounge not found",

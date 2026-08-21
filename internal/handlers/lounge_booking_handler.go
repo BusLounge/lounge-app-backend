@@ -87,7 +87,7 @@ func (h *LoungeBookingHandler) GetLoungeProducts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"products":  products,
+		"data":     products,
 		"lounge_id": loungeID,
 		"total":     len(products),
 	})
