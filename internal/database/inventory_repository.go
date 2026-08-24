@@ -19,7 +19,10 @@ func NewInventoryRepository(db *sqlx.DB) *InventoryRepository {
 	return &InventoryRepository{db: db}
 }
 
-// GetAvailableInventoryItems retrieves master inventory items that are active and not yet enrolled by the specified lounge
+// GetAvailableInventoryItems retrieves all active master inventory items from the catalog.
+// The duplicate-enrollment check is enforced at insert time (EnrollInventoryItem), so
+// this query intentionally returns every active item regardless of whether it has
+// already been added to this lounge's lounge_products table.
 func (r *InventoryRepository) GetAvailableInventoryItems(loungeID uuid.UUID, search string, categoryID string) ([]models.MasterInventoryItem, error) {
 	query := `
 		SELECT 
@@ -38,16 +41,10 @@ func (r *InventoryRepository) GetAvailableInventoryItems(loungeID uuid.UUID, sea
 		FROM lounge_inventory_items li
 		LEFT JOIN lounge_marketplace_categories c ON li.category_id = c.id
 		WHERE li.is_active = true
-		AND NOT EXISTS (
-			SELECT 1
-			FROM lounge_products lp
-			WHERE lp.lounge_id = $1
-			  AND lp.inventory_item_id = li.id
-		)
 	`
 	
-	args := []interface{}{loungeID}
-	paramCount := 1
+	args := []interface{}{}
+	paramCount := 0
 
 	if search != "" {
 		paramCount++
