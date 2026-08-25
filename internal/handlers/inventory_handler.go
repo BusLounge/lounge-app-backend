@@ -218,3 +218,164 @@ func (h *InventoryHandler) AddInventoryItem(c *gin.Context) {
 		"data":    product,
 	})
 }
+
+// DeleteProduct handles DELETE /api/v1/lounges/:id/products/:product_id
+func (h *InventoryHandler) DeleteProduct(c *gin.Context) {
+	loungeID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid lounge ID"})
+		return
+	}
+	productID, err := uuid.Parse(c.Param("product_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid product ID"})
+		return
+	}
+
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized", Message: "User context not found"})
+		return
+	}
+
+	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Failed to verify ownership"})
+		return
+	}
+	lounge, err := h.loungeRepo.GetLoungeByID(loungeID)
+	if err != nil || lounge == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: "Lounge not found"})
+		return
+	}
+	if owner == nil || lounge.LoungeOwnerID != owner.ID {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "forbidden", Message: "Not authorized"})
+		return
+	}
+
+	if err := h.inventoryService.DeleteLoungeProduct(loungeID, productID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: err.Error()})
+			return
+		}
+		log.Printf("ERROR: Failed to delete product: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Failed to delete product"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Product deleted successfully"})
+}
+
+// UpdateProduct handles PUT /api/v1/lounges/:id/products/:product_id
+func (h *InventoryHandler) UpdateProduct(c *gin.Context) {
+	loungeID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid lounge ID"})
+		return
+	}
+	productID, err := uuid.Parse(c.Param("product_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid product ID"})
+		return
+	}
+
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized", Message: "User context not found"})
+		return
+	}
+
+	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Failed to verify ownership"})
+		return
+	}
+	lounge, err := h.loungeRepo.GetLoungeByID(loungeID)
+	if err != nil || lounge == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: "Lounge not found"})
+		return
+	}
+	if owner == nil || lounge.LoungeOwnerID != owner.ID {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "forbidden", Message: "Not authorized"})
+		return
+	}
+
+	var req services.UpdateProductRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "Invalid request body"})
+		return
+	}
+
+	if err := h.inventoryService.UpdateLoungeProduct(&req, loungeID, productID); err != nil {
+		if strings.Contains(err.Error(), "must be") || strings.Contains(err.Error(), "cannot be") {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: err.Error()})
+			return
+		}
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: err.Error()})
+			return
+		}
+		log.Printf("ERROR: Failed to update product: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Failed to update product"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Product updated successfully"})
+}
+
+// UpdateProductStock handles POST /api/v1/lounges/:id/products/:product_id/stock
+func (h *InventoryHandler) UpdateProductStock(c *gin.Context) {
+	loungeID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid lounge ID"})
+		return
+	}
+	productID, err := uuid.Parse(c.Param("product_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid product ID"})
+		return
+	}
+
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized", Message: "User context not found"})
+		return
+	}
+
+	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Failed to verify ownership"})
+		return
+	}
+	lounge, err := h.loungeRepo.GetLoungeByID(loungeID)
+	if err != nil || lounge == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: "Lounge not found"})
+		return
+	}
+	if owner == nil || lounge.LoungeOwnerID != owner.ID {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "forbidden", Message: "Not authorized"})
+		return
+	}
+
+	var req services.UpdateStockRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "Invalid request body"})
+		return
+	}
+
+	if err := h.inventoryService.UpdateProductStock(&req, loungeID, productID, userCtx.UserID); err != nil {
+		if strings.Contains(err.Error(), "cannot be negative") {
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: err.Error()})
+			return
+		}
+		if strings.Contains(err.Error(), "not found") {
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "not_found", Message: err.Error()})
+			return
+		}
+		log.Printf("ERROR: Failed to update stock: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Failed to update stock"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Stock updated successfully"})
+}

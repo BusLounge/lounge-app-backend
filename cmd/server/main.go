@@ -878,6 +878,12 @@ func main() {
 			loungesProtectedProducts.GET("/:id/inventory/catalog", inventoryHandler.GetAvailableCatalog)
 			logger.Info("  ✅ POST /api/v1/lounges/:id/inventory (requires approval)")
 			loungesProtectedProducts.POST("/:id/inventory", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), inventoryHandler.AddInventoryItem)
+			logger.Info("  ✅ DELETE /api/v1/lounges/:id/products/:product_id (requires approval)")
+			loungesProtectedProducts.DELETE("/:id/products/:product_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), inventoryHandler.DeleteProduct)
+			logger.Info("  ✅ PUT /api/v1/lounges/:id/products/:product_id (requires approval)")
+			loungesProtectedProducts.PUT("/:id/products/:product_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), inventoryHandler.UpdateProduct)
+			logger.Info("  ✅ POST /api/v1/lounges/:id/products/:product_id/stock (requires approval)")
+			loungesProtectedProducts.POST("/:id/products/:product_id/stock", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), inventoryHandler.UpdateProductStock)
 
 			// Bookings for a lounge (owner/staff view - read-only, no approval needed)
 			logger.Info("  ✅ GET /api/v1/lounges/:id/bookings (owner/staff, read-only)")

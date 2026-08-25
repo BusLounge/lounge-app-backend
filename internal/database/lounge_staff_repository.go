@@ -221,9 +221,9 @@ func (r *LoungeStaffRepository) UpdateStaffEmploymentStatus(
 	query := `
 		UPDATE lounge_staff 
 		SET 
-			employment_status = $1,
+			employment_status = $1::lounge_staff_employment_status,
 			terminated_date = CASE
-				WHEN $1 = 'terminated' THEN NOW()
+				WHEN $1::text = 'terminated' THEN CURRENT_DATE
 				ELSE terminated_date
 			END,
 			updated_at = NOW()
@@ -296,10 +296,10 @@ func (r *LoungeStaffRepository) UpdateStaffApprovalStatus(
 	query := `
 		UPDATE lounge_staff
 		SET
-			approval_status = $1,
-			employment_status = COALESCE($2, employment_status),
+			approval_status = $1::lounge_staff_approval_status,
+			employment_status = COALESCE($2::lounge_staff_employment_status, employment_status),
 			hired_date = CASE
-				WHEN $1 = 'approved' THEN NOW()
+				WHEN $1::text = 'approved' THEN CURRENT_DATE
 				ELSE hired_date
 			END,	
 			updated_at = NOW()

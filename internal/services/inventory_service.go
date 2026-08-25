@@ -198,3 +198,98 @@ func (s *InventoryService) EnrollInventoryItem(req *EnrollInventoryItemRequest, 
 
 	return loungeProduct, nil
 }
+
+// UpdateProductRequest contains data for editing a lounge product
+type UpdateProductRequest struct {
+	SellingPrice float64 `json:"selling_price"`
+	ReorderLevel int     `json:"reorder_level"`
+	IsAvailable  bool    `json:"is_available"`
+}
+
+// UpdateStockRequest contains data for a stock update
+type UpdateStockRequest struct {
+	NewQuantity int    `json:"new_quantity"`
+	Reason      string `json:"reason"`
+}
+
+// DeleteLoungeProduct soft-deletes a product from a lounge's inventory
+func (s *InventoryService) DeleteLoungeProduct(loungeID uuid.UUID, productID uuid.UUID) error {
+	return s.inventoryRepo.DeleteLoungeProduct(loungeID, productID)
+}
+
+// UpdateLoungeProduct updates a lounge product's editable fields
+func (s *InventoryService) UpdateLoungeProduct(req *UpdateProductRequest, loungeID uuid.UUID, productID uuid.UUID) error {
+	if req.SellingPrice <= 0 {
+		return errors.New("selling_price must be greater than 0")
+	}
+	if req.ReorderLevel < 0 {
+		return errors.New("reorder_level cannot be negative")
+	}
+	priceStr := fmt.Sprintf("%.2f", req.SellingPrice)
+	return s.inventoryRepo.UpdateLoungeProductFields(loungeID, productID, priceStr, nil, req.ReorderLevel, req.IsAvailable)
+}
+
+// UpdateProductStock updates the stock quantity for a product and inserts an audit transaction
+func (s *InventoryService) UpdateProductStock(req *UpdateStockRequest, loungeID uuid.UUID, productID uuid.UUID, userID uuid.UUID) error {
+	if req.NewQuantity < 0 {
+		return errors.New("new_quantity cannot be negative")
+	}
+
+	// Fetch current product to know current stock
+	product, err := s.inventoryRepo.GetLoungeProductByID(loungeID, productID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch product: %w", err)
+	}
+	if product == nil {
+		return errors.New("product not found")
+	}
+
+	currentStock := 0
+	if product.StockQuantity != nil {
+		currentStock = *product.StockQuantity
+	}
+
+	delta := req.NewQuantity - currentStock
+	txType := models.TransactionTypeStockIn
+	if delta < 0 {
+		txType = models.TransactionTypeStockOut
+		delta = -delta
+	} else if delta == 0 {
+		// No change — record as adjustment
+		txType = models.TransactionType("ADJUSTMENT")
+		delta = req.NewQuantity
+	}
+
+	newStockStatus := "in_stock"
+	if req.NewQuantity == 0 {
+		newStockStatus = "out_of_stock"
+	} else {
+		reorderLevel := 0
+		if product.ReorderLevel != nil {
+			reorderLevel = *product.ReorderLevel
+		}
+		if req.NewQuantity <= reorderLevel {
+			newStockStatus = "low_stock"
+		}
+	}
+
+	reason := req.Reason
+	if reason == "" {
+		reason = "Manual stock update"
+	}
+
+	transaction := &models.InventoryTransaction{
+		ID:              uuid.New(),
+		LoungeID:        loungeID,
+		LoungeProductID: productID,
+		TransactionType: txType,
+		Quantity:        delta,
+		StockBefore:     currentStock,
+		StockAfter:      req.NewQuantity,
+		Reason:          &reason,
+		CreatedByUserID: userID,
+		CreatedAt:       time.Now().UTC(),
+	}
+
+	return s.inventoryRepo.UpdateLoungeProductStock(transaction, req.NewQuantity, newStockStatus)
+}

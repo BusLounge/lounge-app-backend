@@ -199,3 +199,107 @@ func (r *InventoryRepository) CreateLoungeProductTx(
 
 	return nil
 }
+
+// DeleteLoungeProduct soft-deletes a lounge product by setting is_active = false
+func (r *InventoryRepository) DeleteLoungeProduct(loungeID uuid.UUID, productID uuid.UUID) error {
+	query := `
+		UPDATE lounge_products
+		SET is_active = false, is_available = false, updated_at = NOW()
+		WHERE id = $1 AND lounge_id = $2 AND is_active = true
+	`
+	result, err := r.db.Exec(query, productID, loungeID)
+	if err != nil {
+		return fmt.Errorf("failed to delete lounge product: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("product not found or already deleted")
+	}
+	return nil
+}
+
+// UpdateLoungeProductFields updates editable fields on a lounge product
+func (r *InventoryRepository) UpdateLoungeProductFields(loungeID uuid.UUID, productID uuid.UUID, price string, discountedPrice *string, reorderLevel int, isAvailable bool) error {
+	query := `
+		UPDATE lounge_products
+		SET price = $1,
+		    discounted_price = $2,
+		    reorder_level = $3,
+		    is_available = $4,
+		    updated_at = NOW()
+		WHERE id = $5 AND lounge_id = $6 AND is_active = true
+	`
+	result, err := r.db.Exec(query, price, discountedPrice, reorderLevel, isAvailable, productID, loungeID)
+	if err != nil {
+		return fmt.Errorf("failed to update lounge product: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("product not found")
+	}
+	return nil
+}
+
+// UpdateLoungeProductStock updates the stock quantity and inserts an audit transaction atomically
+func (r *InventoryRepository) UpdateLoungeProductStock(transaction *models.InventoryTransaction, newQty int, newStockStatus string) error {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// 1. Update stock quantity and status
+	updateQuery := `
+		UPDATE lounge_products
+		SET stock_quantity = $1,
+		    stock_status = $2,
+		    updated_at = NOW()
+		WHERE id = $3 AND lounge_id = $4 AND is_active = true
+	`
+	result, err := tx.Exec(updateQuery, newQty, newStockStatus, transaction.LoungeProductID, transaction.LoungeID)
+	if err != nil {
+		return fmt.Errorf("failed to update product stock: %w", err)
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("product not found")
+	}
+
+	// 2. Insert audit transaction
+	insertTxQuery := `
+		INSERT INTO lounge_inventory_transactions (
+			id, lounge_id, lounge_product_id, transaction_type, quantity,
+			stock_before, stock_after, reason, created_by_user_id, created_at
+		) VALUES (
+			:id, :lounge_id, :lounge_product_id, :transaction_type, :quantity,
+			:stock_before, :stock_after, :reason, :created_by_user_id, :created_at
+		)
+	`
+	_, err = tx.NamedExec(insertTxQuery, transaction)
+	if err != nil {
+		return fmt.Errorf("failed to insert stock transaction: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// GetLoungeProductByID retrieves a single active lounge product by ID
+func (r *InventoryRepository) GetLoungeProductByID(loungeID uuid.UUID, productID uuid.UUID) (*models.LoungeProduct, error) {
+	query := `
+		SELECT id, lounge_id, category_id, name, description, product_type,
+		       price, discounted_price, image_url, thumbnail_url, inventory_item_id,
+		       stock_status, stock_quantity, reorder_level, is_available, is_active,
+		       created_at, updated_at, price_rate_type
+		FROM lounge_products
+		WHERE id = $1 AND lounge_id = $2 AND is_active = true
+	`
+	var product models.LoungeProduct
+	err := r.db.Get(&product, query, productID, loungeID)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &product, nil
+}

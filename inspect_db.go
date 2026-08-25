@@ -16,30 +16,25 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	query := `
+		UPDATE lounge_staff
+		SET
+			approval_status = $1::lounge_staff_approval_status,
+			employment_status = COALESCE($2::lounge_staff_employment_status, employment_status),
+			hired_date = CASE
+				WHEN $1::text = 'approved' THEN CURRENT_DATE
+				ELSE hired_date
+			END,	
+			updated_at = NOW()
+		WHERE id = $3
+	`
 
-	rows, err := db.Query(`
-		SELECT column_name, data_type, is_nullable, column_default 
-		FROM information_schema.columns 
-		WHERE table_name = 'lounge_booking_driver_assignments'
-		ORDER BY column_name
-	`)
+	res, err := db.Exec(query, "approved", "active", "600d7ac0-946d-4b49-b666-5eb2b0cfeb0d")
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("ERROR executing update: %v\n", err)
+	} else {
+		rows, _ := res.RowsAffected()
+		fmt.Printf("SUCCESS! Rows affected: %d\n", rows)
 	}
-	defer rows.Close()
 
-	fmt.Println("Columns in lounge_booking_driver_assignments:")
-	for rows.Next() {
-		var colName, dataType, isNullable string
-		var colDefault sql.NullString
-		if err := rows.Scan(&colName, &dataType, &isNullable, &colDefault); err != nil {
-			log.Fatal(err)
-		}
-		defVal := "NULL"
-		if colDefault.Valid {
-			defVal = colDefault.String
-		}
-		fmt.Printf("- %s: %s (nullable: %s, default: %s)\n", colName, dataType, isNullable, defVal)
-	}
 }
