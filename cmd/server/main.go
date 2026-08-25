@@ -858,10 +858,6 @@ func main() {
 			loungesProtectedProducts.GET("/:id/products", loungeBookingHandler.GetLoungeProducts)
 			logger.Info("  ✅ POST /api/v1/lounges/:id/products (requires approval)")
 			loungesProtectedProducts.POST("/:id/products", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeBookingHandler.CreateProduct)
-			logger.Info("  ✅ PUT /api/v1/lounges/:id/products/:product_id (requires approval)")
-			loungesProtectedProducts.PUT("/:id/products/:product_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeBookingHandler.UpdateProduct)
-			logger.Info("  ✅ DELETE /api/v1/lounges/:id/products/:product_id (requires approval)")
-			loungesProtectedProducts.DELETE("/:id/products/:product_id", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeBookingHandler.DeleteProduct)
 
 			// Special Packages for a lounge (New Endpoints)
 			logger.Info("  ✅ GET /api/v1/marketplace/special-packages/lounge/:lounge_id (read-only, no approval needed)")
