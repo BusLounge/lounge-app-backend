@@ -1165,6 +1165,234 @@ paths:
                     example: Logout successful
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/change-phone/send-current-otp:
+    post:
+      summary: Send OTP to current phone number
+      description: 'Sends an OTP to the authenticated user''s current phone number to verify ownership before allowing a phone change.
+
+
+        **Security:** Requires Bearer JWT token.
+
+
+        **Rate Limiting:** Maximum 3 requests per 10 minutes.
+
+        '
+      operationId: sendCurrentPhoneOtp
+      tags:
+      - Authentication
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: OTP sent to current phone successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: OTP sent to your current phone number
+                  phone:
+                    type: string
+                    example: '+94710165438'
+                  expires_at:
+                    type: string
+                    format: date-time
+                    example: '2026-09-28T08:05:00Z'
+                  expires_in:
+                    type: integer
+                    example: 300
+                  otp:
+                    type: string
+                    description: Only present in development mode
+                    example: '123456'
+                  mode:
+                    type: string
+                    example: development
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/auth/change-phone/verify-current:
+    post:
+      summary: Verify OTP for current phone number
+      description: 'Validates the OTP sent to the user''s current phone number to prove ownership.
+
+
+        **Security:** Requires Bearer JWT token.
+
+        '
+      operationId: verifyCurrentPhoneOtp
+      tags:
+      - Authentication
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - otp
+              properties:
+                otp:
+                  type: string
+                  description: 6-digit OTP received on current phone
+                  example: '123456'
+      responses:
+        '200':
+          description: Current phone verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Current phone number verified successfully. You may now submit your new phone number.
+                  phone:
+                    type: string
+                    example: '+94710165438'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/auth/change-phone/send-otp:
+    post:
+      summary: Send OTP to new phone number
+      description: 'Sends an OTP to the proposed new phone number for verification before updating.
+
+
+        **Security:** Requires Bearer JWT token.
+
+
+        **Rate Limiting:** Maximum 3 requests per 10 minutes.
+
+        '
+      operationId: sendChangePhoneOtp
+      tags:
+      - Authentication
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - new_phone
+              properties:
+                new_phone:
+                  type: string
+                  description: Sri Lankan phone number in E.164 format
+                  pattern: ^\+94[0-9]{9}$
+                  example: '+94771234567'
+      responses:
+        '200':
+          description: OTP sent to new phone successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: OTP sent to new phone number
+                  phone:
+                    type: string
+                    example: '+94771234567'
+                  expires_at:
+                    type: string
+                    format: date-time
+                    example: '2026-09-28T08:05:00Z'
+                  expires_in:
+                    type: integer
+                    example: 300
+                  otp:
+                    type: string
+                    description: Only present in development mode
+                    example: '123456'
+                  mode:
+                    type: string
+                    example: development
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/auth/change-phone/verify:
+    post:
+      summary: Verify OTP and update phone number
+      description: 'Verifies the OTP sent to the new phone number and updates the user''s phone in the database upon successful verification.
+
+
+        **Security:** Requires Bearer JWT token.
+
+        '
+      operationId: verifyAndChangePhone
+      tags:
+      - Authentication
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - new_phone
+              - otp
+              properties:
+                new_phone:
+                  type: string
+                  description: Sri Lankan phone number in E.164 format
+                  pattern: ^\+94[0-9]{9}$
+                  example: '+94771234567'
+                otp:
+                  type: string
+                  description: 6-digit OTP received on new phone
+                  example: '123456'
+      responses:
+        '200':
+          description: Phone number updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Phone number updated successfully
+                  new_phone:
+                    type: string
+                    example: '+94771234567'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/user/profile:
     get:
       summary: Get user profile (Passenger)
