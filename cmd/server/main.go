@@ -537,6 +537,13 @@ func main() {
 			protected.Use(middleware.AuthMiddleware(jwtService))
 			{
 				protected.POST("/logout", authHandler.Logout)
+				// Change phone number – dual verification flow:
+				//  1. Send OTP to CURRENT phone  → verify it
+				//  2. Send OTP to NEW phone       → verify it → phone updated
+				protected.POST("/change-phone/send-current-otp", authHandler.SendCurrentPhoneOTP)
+				protected.POST("/change-phone/verify-current", authHandler.VerifyCurrentPhoneOTP)
+				protected.POST("/change-phone/send-otp", authHandler.SendChangePhoneOTP)
+				protected.POST("/change-phone/verify", authHandler.VerifyAndChangePhone)
 			}
 		}
 

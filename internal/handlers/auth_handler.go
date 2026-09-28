@@ -2554,3 +2554,353 @@ func (h *AuthHandler) VerifyOTPGeneric(c *gin.Context) {
 		Roles:           user.Roles, // Will be empty for new users
 	})
 }
+
+// ChangePhoneSendOTPRequest is the request body for sending OTP to a new phone number
+type ChangePhoneSendOTPRequest struct {
+	NewPhone string `json:"new_phone" binding:"required"`
+}
+
+// ChangePhoneVerifyRequest is the request body for verifying OTP and updating phone
+type ChangePhoneVerifyRequest struct {
+	NewPhone string `json:"new_phone" binding:"required"`
+	OTP      string `json:"otp" binding:"required"`
+}
+
+// SendChangePhoneOTP handles POST /api/v1/auth/change-phone/send-otp (protected)
+// Sends an OTP to the new phone number for verification before changing.
+func (h *AuthHandler) SendChangePhoneOTP(c *gin.Context) {
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized", Message: "User context not found"})
+		return
+	}
+
+	var req ChangePhoneSendOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "new_phone is required"})
+		return
+	}
+
+	// Validate the new phone number
+	newPhone, err := h.phoneValidator.Validate(req.NewPhone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_phone", Message: err.Error()})
+		return
+	}
+
+	// Make sure the new phone isn't already taken by another user
+	existing, err := h.userRepository.GetUserByPhone(newPhone)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "lookup_failed", Message: "Failed to check phone availability"})
+		return
+	}
+	if existing != nil && existing.ID != userCtx.UserID {
+		c.JSON(http.StatusConflict, ErrorResponse{Error: "phone_already_in_use", Message: "This phone number is already registered to another account"})
+		return
+	}
+
+	clientIP := utils.GetRealIP(c)
+	userAgent := utils.GetUserAgent(c)
+
+	// Check rate limiting
+	if err := h.rateLimitService.CheckOTPRateLimit(newPhone, clientIP); err != nil {
+		if rateLimitErr, ok := err.(*services.RateLimitError); ok {
+			h.auditService.LogRateLimitViolation(newPhone, clientIP, userAgent, rateLimitErr.Type, rateLimitErr.RetryAfter)
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":       "rate_limit_exceeded",
+				"message":     rateLimitErr.Message,
+				"retry_after": rateLimitErr.RetryAfter,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "rate_limit_check_failed", Message: "Failed to check rate limit"})
+		return
+	}
+
+	// Generate OTP for the new phone number
+	otp, err := h.otpService.GenerateOTPForApp(newPhone, clientIP, userAgent, "lounge_owner")
+	if err != nil {
+		h.auditService.LogOTPRequest(newPhone, clientIP, userAgent, false, "generation_failed")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "otp_generation_failed", Message: "Failed to generate OTP"})
+		return
+	}
+
+	_ = h.rateLimitService.RecordOTPRequest(newPhone, clientIP)
+	h.auditService.LogOTPRequest(newPhone, clientIP, userAgent, true, "")
+
+	expiresAt, _ := h.otpService.GetOTPExpiry(newPhone)
+	expiresIn := int(time.Until(expiresAt).Seconds())
+
+	// Send SMS in production mode
+	if h.config.SMS.Mode == "production" {
+		transactionID, err := h.smsGateway.SendOTP(newPhone, otp, "lounge_owner")
+		if err != nil {
+			log.Printf("❌ ERROR: Failed to send change-phone SMS to %s: %v", newPhone, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "sms_send_failed",
+				"message": "Failed to send OTP via SMS. Please try again.",
+			})
+			return
+		}
+		log.Printf("✅ Change-phone SMS sent to %s, transaction_id: %d", newPhone, transactionID)
+		c.JSON(http.StatusOK, gin.H{
+			"message":    "OTP sent to new phone number",
+			"phone":      newPhone,
+			"expires_at": expiresAt,
+			"expires_in": expiresIn,
+			"mode":       "production",
+		})
+		return
+	}
+
+	// Development mode
+	log.Printf("🧪 DEV MODE change-phone OTP | user=%s | new_phone=%s | otp=%s", userCtx.UserID, newPhone, otp)
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "OTP generated for new phone (dev mode - no SMS sent)",
+		"phone":      newPhone,
+		"expires_at": expiresAt,
+		"expires_in": expiresIn,
+		"otp":        otp,
+		"mode":       "development",
+	})
+}
+
+// VerifyAndChangePhone handles POST /api/v1/auth/change-phone/verify (protected)
+// Verifies the OTP sent to the new phone number and updates the user's phone in the database.
+func (h *AuthHandler) VerifyAndChangePhone(c *gin.Context) {
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized", Message: "User context not found"})
+		return
+	}
+
+	var req ChangePhoneVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "new_phone and otp are required"})
+		return
+	}
+
+	// Validate new phone number
+	newPhone, err := h.phoneValidator.Validate(req.NewPhone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_phone", Message: err.Error()})
+		return
+	}
+
+	clientIP := utils.GetRealIP(c)
+	userAgent := utils.GetUserAgent(c)
+	remainingBefore, _ := h.otpService.GetRemainingAttempts(newPhone)
+
+	// Validate the OTP sent to the new phone number
+	valid, err := h.otpService.ValidateOTP(newPhone, req.OTP)
+	if err != nil {
+		attempts := 3 - remainingBefore + 1
+		h.auditService.LogOTPVerification(nil, newPhone, false, attempts, clientIP, userAgent, err.Error())
+
+		switch err {
+		case services.ErrOTPExpired:
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_expired", Message: "OTP has expired. Please request a new one.", Code: "OTP_EXPIRED"})
+		case services.ErrOTPInvalid:
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_invalid", Message: "Invalid OTP code", Code: "OTP_INVALID"})
+		case services.ErrMaxAttemptsExceeded:
+			c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: "max_attempts_exceeded", Message: "Maximum OTP attempts exceeded. Please request a new OTP.", Code: "MAX_ATTEMPTS"})
+		case services.ErrNoOTPFound:
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "no_otp_found", Message: "No OTP found for this phone. Please request an OTP first.", Code: "NO_OTP"})
+		case services.ErrOTPAlreadyUsed:
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_already_used", Message: "This OTP has already been used. Please request a new one.", Code: "OTP_USED"})
+		default:
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "validation_failed", Message: "Failed to validate OTP"})
+		}
+		return
+	}
+
+	if !valid {
+		attempts := 3 - remainingBefore + 1
+		h.auditService.LogOTPVerification(nil, newPhone, false, attempts, clientIP, userAgent, "invalid_code")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_invalid", Message: "Invalid OTP code"})
+		return
+	}
+
+	// Confirm new phone isn't taken by another account
+	existing, err := h.userRepository.GetUserByPhone(newPhone)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "lookup_failed", Message: "Failed to check phone availability"})
+		return
+	}
+	if existing != nil && existing.ID != userCtx.UserID {
+		c.JSON(http.StatusConflict, ErrorResponse{Error: "phone_already_in_use", Message: "This phone number is already registered to another account"})
+		return
+	}
+
+	// Update the phone number in the database
+	if err := h.userRepository.UpdateUserPhone(userCtx.UserID, newPhone); err != nil {
+		log.Printf("ERROR: Failed to update phone for user %s: %v", userCtx.UserID, err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "phone_update_failed", Message: "Failed to update phone number"})
+		return
+	}
+
+	log.Printf("INFO: Phone updated for user %s -> %s", userCtx.UserID, newPhone)
+	h.auditService.LogOTPVerification(&userCtx.UserID, newPhone, true, 3-remainingBefore+1, clientIP, userAgent, "")
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Phone number updated successfully",
+		"new_phone": newPhone,
+	})
+}
+
+// VerifyCurrentPhoneOTPRequest is the request body for verifying OTP on the current phone
+type VerifyCurrentPhoneOTPRequest struct {
+	OTP string `json:"otp" binding:"required"`
+}
+
+// SendCurrentPhoneOTP handles POST /api/v1/auth/change-phone/send-current-otp (protected)
+// Sends an OTP to the authenticated user's CURRENT registered phone number.
+func (h *AuthHandler) SendCurrentPhoneOTP(c *gin.Context) {
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized", Message: "User context not found"})
+		return
+	}
+
+	// Retrieve the user's current phone from the database (source of truth)
+	user, err := h.userRepository.GetUserByID(userCtx.UserID)
+	if err != nil || user == nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "user_lookup_failed", Message: "Failed to retrieve user"})
+		return
+	}
+
+	currentPhone := user.Phone
+
+	clientIP := utils.GetRealIP(c)
+	userAgent := utils.GetUserAgent(c)
+
+	// Rate-limit check
+	if err := h.rateLimitService.CheckOTPRateLimit(currentPhone, clientIP); err != nil {
+		if rateLimitErr, ok := err.(*services.RateLimitError); ok {
+			h.auditService.LogRateLimitViolation(currentPhone, clientIP, userAgent, rateLimitErr.Type, rateLimitErr.RetryAfter)
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":       "rate_limit_exceeded",
+				"message":     rateLimitErr.Message,
+				"retry_after": rateLimitErr.RetryAfter,
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "rate_limit_check_failed", Message: "Failed to check rate limit"})
+		return
+	}
+
+	// Generate OTP for the current phone
+	otp, err := h.otpService.GenerateOTPForApp(currentPhone, clientIP, userAgent, "lounge_owner")
+	if err != nil {
+		h.auditService.LogOTPRequest(currentPhone, clientIP, userAgent, false, "generation_failed")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "otp_generation_failed", Message: "Failed to generate OTP"})
+		return
+	}
+
+	_ = h.rateLimitService.RecordOTPRequest(currentPhone, clientIP)
+	h.auditService.LogOTPRequest(currentPhone, clientIP, userAgent, true, "")
+
+	expiresAt, _ := h.otpService.GetOTPExpiry(currentPhone)
+	expiresIn := int(time.Until(expiresAt).Seconds())
+
+	if h.config.SMS.Mode == "production" {
+		transactionID, err := h.smsGateway.SendOTP(currentPhone, otp, "lounge_owner")
+		if err != nil {
+			log.Printf("❌ ERROR: Failed to send current-phone OTP to %s: %v", currentPhone, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "sms_send_failed",
+				"message": "Failed to send OTP via SMS. Please try again.",
+			})
+			return
+		}
+		log.Printf("✅ Current-phone OTP sent to %s, transaction_id: %d", currentPhone, transactionID)
+		c.JSON(http.StatusOK, gin.H{
+			"message":    "OTP sent to your current phone number",
+			"phone":      currentPhone,
+			"expires_at": expiresAt,
+			"expires_in": expiresIn,
+			"mode":       "production",
+		})
+		return
+	}
+
+	// Development mode – return OTP in response
+	log.Printf("🧪 DEV MODE current-phone OTP | user=%s | phone=%s | otp=%s", userCtx.UserID, currentPhone, otp)
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "OTP generated for current phone (dev mode - no SMS sent)",
+		"phone":      currentPhone,
+		"expires_at": expiresAt,
+		"expires_in": expiresIn,
+		"otp":        otp,
+		"mode":       "development",
+	})
+}
+
+// VerifyCurrentPhoneOTP handles POST /api/v1/auth/change-phone/verify-current (protected)
+// Validates the OTP sent to the user's current phone, confirming they own it.
+// On success returns a plain 200 so the client can proceed to submit the new phone number.
+func (h *AuthHandler) VerifyCurrentPhoneOTP(c *gin.Context) {
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized", Message: "User context not found"})
+		return
+	}
+
+	var req VerifyCurrentPhoneOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "otp is required"})
+		return
+	}
+
+	// Retrieve user to get the current phone
+	user, err := h.userRepository.GetUserByID(userCtx.UserID)
+	if err != nil || user == nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "user_lookup_failed", Message: "Failed to retrieve user"})
+		return
+	}
+
+	currentPhone := user.Phone
+	clientIP := utils.GetRealIP(c)
+	userAgent := utils.GetUserAgent(c)
+	remainingBefore, _ := h.otpService.GetRemainingAttempts(currentPhone)
+
+	// Validate OTP against the current phone
+	valid, err := h.otpService.ValidateOTP(currentPhone, req.OTP)
+	if err != nil {
+		attempts := 3 - remainingBefore + 1
+		h.auditService.LogOTPVerification(nil, currentPhone, false, attempts, clientIP, userAgent, err.Error())
+
+		switch err {
+		case services.ErrOTPExpired:
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_expired", Message: "OTP has expired. Please request a new one.", Code: "OTP_EXPIRED"})
+		case services.ErrOTPInvalid:
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_invalid", Message: "Invalid OTP code", Code: "OTP_INVALID"})
+		case services.ErrMaxAttemptsExceeded:
+			c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: "max_attempts_exceeded", Message: "Maximum OTP attempts exceeded. Please request a new OTP.", Code: "MAX_ATTEMPTS"})
+		case services.ErrNoOTPFound:
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "no_otp_found", Message: "No OTP found. Please request an OTP first.", Code: "NO_OTP"})
+		case services.ErrOTPAlreadyUsed:
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_already_used", Message: "This OTP has already been used. Please request a new one.", Code: "OTP_USED"})
+		default:
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "validation_failed", Message: "Failed to validate OTP"})
+		}
+		return
+	}
+
+	if !valid {
+		attempts := 3 - remainingBefore + 1
+		h.auditService.LogOTPVerification(nil, currentPhone, false, attempts, clientIP, userAgent, "invalid_code")
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "otp_invalid", Message: "Invalid OTP code"})
+		return
+	}
+
+	h.auditService.LogOTPVerification(&userCtx.UserID, currentPhone, true, 3-remainingBefore+1, clientIP, userAgent, "")
+	log.Printf("INFO: Current phone verified for user %s (phone: %s) — proceeding to new-phone step", userCtx.UserID, currentPhone)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Current phone number verified successfully. You may now submit your new phone number.",
+		"phone":   currentPhone,
+	})
+}
+
+

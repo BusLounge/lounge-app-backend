@@ -546,6 +546,33 @@ func (r *UserRepository) CountUsers() (int, error) {
 	return count, nil
 }
 
+// UpdateUserPhone updates the phone number for a user (used in change-phone flow)
+func (r *UserRepository) UpdateUserPhone(id uuid.UUID, newPhone string) error {
+	query := `
+		UPDATE users
+		SET phone = $1,
+		    phone_verified = true,
+		    updated_at = $2
+		WHERE id = $3
+	`
+
+	result, err := r.db.Exec(query, newPhone, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("failed to update user phone: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
+
 // add users with there full data into the user table (this makes it easy to search for users )
 func (r *UserRepository) CreateUserWithFullData(
 	phone string, 
