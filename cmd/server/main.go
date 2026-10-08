@@ -274,6 +274,20 @@ func main() {
 		loungeOwnerRepository,
 	)
 
+	// Initialize lounge owner wallet repository and handler
+	logger.Info("💰 Initializing lounge owner wallet system...")
+	loungeOwnerWalletRepo := database.NewLoungeOwnerWalletRepository(sqlxDB.DB)
+	if err := loungeOwnerWalletRepo.EnsureTablesExist(); err != nil {
+		logger.Fatalf("Failed to initialize wallet tables: %v", err)
+	}
+	loungeOwnerWalletHandler := handlers.NewWalletHandler(
+		loungeOwnerWalletRepo,
+		loungeOwnerRepository,
+		loungeOwnerBankRepo,
+		loungeOwnerBankLinkRepo,
+	)
+	logger.Info("✓ Lounge owner wallet system initialized")
+
 	// Initialize lounge booking system first before staff handler
 	logger.Info("🏨 Initializing lounge booking system...")
 	loungeBookingRepo := database.NewLoungeBookingRepository(sqlxDB.DB)
@@ -721,6 +735,14 @@ func main() {
 				loungeOwner.GET("/bank-links", loungeOwnerBankHandler.ListBankLinks)
 				logger.Info("  ✅ DELETE /api/v1/lounge-owner/bank-links/:id")
 				loungeOwner.DELETE("/bank-links/:id", loungeOwnerBankHandler.DeleteBankLink)
+
+				// Wallet & Withdrawal endpoints
+				logger.Info("  ✅ GET /api/v1/lounge-owner/wallet/status")
+				loungeOwner.GET("/wallet/status", loungeOwnerWalletHandler.GetWalletStatus)
+				logger.Info("  ✅ POST /api/v1/lounge-owner/wallet/withdraw")
+				loungeOwner.POST("/wallet/withdraw", loungeOwnerWalletHandler.RequestWithdrawal)
+				logger.Info("  ✅ GET /api/v1/lounge-owner/wallet/transactions")
+				loungeOwner.GET("/wallet/transactions", loungeOwnerWalletHandler.ListMyTransactions)
 			}
 
 		}
@@ -1299,6 +1321,11 @@ func main() {
 
 			// Search analytics
 			admin.GET("/search/analytics", searchHandler.GetSearchAnalytics)
+
+			// Lounge Owner Wallet Settlement & Management
+			admin.POST("/wallet/settle-owner", loungeOwnerWalletHandler.AdminSettleOwner)
+			admin.GET("/wallet/transactions", loungeOwnerWalletHandler.AdminListAllTransactions)
+			admin.GET("/wallet/owner/:owner_id", loungeOwnerWalletHandler.AdminGetOwnerWallet)
 		}
 	}
 
