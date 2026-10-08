@@ -6135,6 +6135,129 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounge-owner/cards:
+    post:
+      summary: Add payment method card
+      description: Adds a new credit/debit payment card for the authenticated user and stores it in staff_bank_details.
+      operationId: addLoungeOwnerPaymentCard
+      tags:
+      - Lounge Owner
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - card_number
+              - expiration_date
+              - security_code
+              - full_name
+              - country_or_region
+              - address_line_1
+              properties:
+                card_number:
+                  type: string
+                  example: "4242424242424242"
+                expiration_date:
+                  type: string
+                  example: "12/28"
+                security_code:
+                  type: string
+                  example: "123"
+                full_name:
+                  type: string
+                  example: "Ruwan Perera"
+                country_or_region:
+                  type: string
+                  example: "Sri Lanka"
+                address_line_1:
+                  type: string
+                  example: "123 Galle Road, Colombo"
+                card_type:
+                  type: string
+                  example: "card"
+                card_brand:
+                  type: string
+                  example: "Visa"
+      responses:
+        '201':
+          description: Payment method saved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Payment method saved successfully
+                  card:
+                    type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    get:
+      summary: List saved payment method cards
+      description: Returns saved cards for the authenticated user from staff_bank_details.
+      operationId: listLoungeOwnerPaymentCards
+      tags:
+      - Lounge Owner
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: List of saved payment cards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cards:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounge-owner/cards/{id}:
+    delete:
+      summary: Delete a saved payment card
+      description: Deletes a saved card from staff_bank_details by ID for the authenticated user.
+      operationId: deleteLoungeOwnerPaymentCard
+      tags:
+      - Lounge Owner
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Card deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Card deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/lounge-owner/registration/progress:
     get:
       summary: Get registration progress

@@ -288,6 +288,10 @@ func main() {
 	)
 	logger.Info("✓ Lounge owner wallet system initialized")
 
+	// Initialize staff bank details repository and card handler
+	staffBankDetailsRepo := database.NewStaffBankDetailsRepository(sqlxDB.DB)
+	staffCardHandler := handlers.NewStaffCardHandler(staffBankDetailsRepo)
+
 	// Initialize lounge booking system first before staff handler
 	logger.Info("🏨 Initializing lounge booking system...")
 	loungeBookingRepo := database.NewLoungeBookingRepository(sqlxDB.DB)
@@ -743,6 +747,14 @@ func main() {
 				loungeOwner.POST("/wallet/withdraw", loungeOwnerWalletHandler.RequestWithdrawal)
 				logger.Info("  ✅ GET /api/v1/lounge-owner/wallet/transactions")
 				loungeOwner.GET("/wallet/transactions", loungeOwnerWalletHandler.ListMyTransactions)
+
+				// Payment card endpoints (saved to staff_bank_details)
+				logger.Info("  ✅ POST /api/v1/lounge-owner/cards")
+				loungeOwner.POST("/cards", staffCardHandler.AddCard)
+				logger.Info("  ✅ GET /api/v1/lounge-owner/cards")
+				loungeOwner.GET("/cards", staffCardHandler.ListCards)
+				logger.Info("  ✅ DELETE /api/v1/lounge-owner/cards/:id")
+				loungeOwner.DELETE("/cards/:id", staffCardHandler.DeleteCard)
 			}
 
 		}
