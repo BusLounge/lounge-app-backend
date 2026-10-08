@@ -2447,6 +2447,147 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /api/v1/admin/wallet/settle-owner:
+    post:
+      summary: Settle lounge owner 14-day earnings
+      description: Credits lounge owner wallet with 14-day settlement earnings.
+      operationId: adminSettleOwnerWallet
+      tags:
+      - Admin
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - owner_id
+              - amount
+              - period_start
+              - period_end
+              properties:
+                owner_id:
+                  type: string
+                  format: uuid
+                  example: d581c281-ba77-49d2-8f68-5f7377417bf8
+                amount:
+                  type: number
+                  format: double
+                  minimum: 1
+                  example: 15000.00
+                period_start:
+                  type: string
+                  format: date
+                  example: "2026-09-01"
+                period_end:
+                  type: string
+                  format: date
+                  example: "2026-09-15"
+                description:
+                  type: string
+                  example: 14-day settlement period
+      responses:
+        '200':
+          description: Settlement processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Settlement processed successfully
+                  wallet_balance:
+                    type: number
+                    format: double
+                    example: 15000.00
+                  transaction:
+                    type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Lounge owner not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/admin/wallet/transactions:
+    get:
+      summary: List all wallet transactions for admin
+      description: Returns all lounge owner wallet transactions.
+      operationId: adminListWalletTransactions
+      tags:
+      - Admin
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 50
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+      responses:
+        '200':
+          description: List of wallet transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 1
+                  transactions:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/admin/wallet/owner/{owner_id}:
+    get:
+      summary: Get owner wallet and recent transactions for admin
+      description: Returns wallet balance and recent transactions for a specific lounge owner.
+      operationId: adminGetOwnerWallet
+      tags:
+      - Admin
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Owner wallet details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wallet:
+                    type: object
+                  recent_transactions:
+                    type: array
+                    items:
+                      type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/staff/check-registration:
     post:
       summary: Check staff registration status
@@ -5860,6 +6001,138 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           description: Bank link not found
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounge-owner/wallet/status:
+    get:
+      summary: Get lounge owner wallet status and balance
+      description: Returns the wallet balance and wallet details for the authenticated lounge owner.
+      operationId: getLoungeOwnerWalletStatus
+      tags:
+      - Lounge Owner
+      security:
+      - BearerAuth: []
+      responses:
+        '200':
+          description: Wallet status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wallet_balance:
+                    type: number
+                    format: double
+                    example: 12500.00
+                  owner_id:
+                    type: string
+                    format: uuid
+                    example: d581c281-ba77-49d2-8f68-5f7377417bf8
+                  wallet:
+                    type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounge-owner/wallet/withdraw:
+    post:
+      summary: Request bank withdrawal from wallet
+      description: Debits the lounge owner wallet and creates a withdrawal transaction.
+      operationId: requestLoungeOwnerWalletWithdrawal
+      tags:
+      - Lounge Owner
+      security:
+      - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - amount
+              - bank_details_id
+              properties:
+                amount:
+                  type: number
+                  format: double
+                  minimum: 1
+                  example: 5000.00
+                bank_details_id:
+                  type: string
+                  format: uuid
+                  example: d581c281-ba77-49d2-8f68-5f7377417bf8
+                description:
+                  type: string
+                  example: Weekly withdrawal to commercial bank
+      responses:
+        '200':
+          description: Withdrawal submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Withdrawal request submitted successfully
+                  wallet_balance:
+                    type: number
+                    format: double
+                    example: 7500.00
+                  transaction:
+                    type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Insufficient balance
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounge-owner/wallet/transactions:
+    get:
+      summary: Get lounge owner wallet transactions
+      description: Returns paginated list of credits and debits for the authenticated lounge owner wallet.
+      operationId: getLoungeOwnerWalletTransactions
+      tags:
+      - Lounge Owner
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          default: 20
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          default: 0
+      responses:
+        '200':
+          description: Wallet transactions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 1
+                  transactions:
+                    type: array
+                    items:
+                      type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalServerError'
   /api/v1/lounge-owner/registration/progress:
