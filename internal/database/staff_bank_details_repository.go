@@ -16,6 +16,9 @@ type StaffBankDetailsRepository struct {
 
 // NewStaffBankDetailsRepository creates a new repository
 func NewStaffBankDetailsRepository(db *sqlx.DB) *StaffBankDetailsRepository {
+	// Ensure single-user constraint is removed so users can add cards in staff_bank_details
+	_, _ = db.Exec(`ALTER TABLE staff_bank_details DROP CONSTRAINT IF EXISTS unique_user_bank;`)
+	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS unique_user_account ON staff_bank_details (user_id, account_number);`)
 	return &StaffBankDetailsRepository{db: db}
 }
 
@@ -40,6 +43,15 @@ func (r *StaffBankDetailsRepository) Create(d *models.StaffBankDetail) (*models.
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 		)
+		ON CONFLICT (user_id, account_number) DO UPDATE SET
+			bank_name = EXCLUDED.bank_name,
+			bank_code = EXCLUDED.bank_code,
+			branch_name = EXCLUDED.branch_name,
+			branch_code = EXCLUDED.branch_code,
+			account_holder_name = EXCLUDED.account_holder_name,
+			account_type = EXCLUDED.account_type,
+			is_default = EXCLUDED.is_default,
+			updated_at = EXCLUDED.updated_at
 		RETURNING id, user_id, staff_id, bank_name, bank_code, branch_name, branch_code,
 		          account_number, account_holder_name, account_type, is_default, created_at, updated_at
 	`
