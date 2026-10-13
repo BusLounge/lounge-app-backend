@@ -1001,6 +1001,13 @@ func (h *LoungeBookingHandler) GetLoungeBookingByID(c *gin.Context) {
 	}
 
 	bookingIDStr := c.Param("id")
+	if bookingIDStr == "owner" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_endpoint",
+			Message: "To retrieve owner bookings, specify the lounge ID via /api/v1/lounges/:lounge_id/bookings",
+		})
+		return
+	}
 	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
