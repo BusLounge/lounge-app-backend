@@ -946,6 +946,8 @@ func main() {
 			loungeBookings.GET("/:id", loungeBookingHandler.GetLoungeBookingByID)
 			logger.Info("  ✅ GET /api/v1/lounge-bookings/reference/:reference - Get by reference")
 			loungeBookings.GET("/reference/:reference", loungeBookingHandler.GetLoungeBookingByReference)
+			logger.Info("  ✅ GET /api/v1/lounge-bookings/master/:reference - Get all bookings by master reference")
+			loungeBookings.GET("/master/:reference", loungeBookingHandler.GetMasterLoungeBookings)
 			logger.Info("  ✅ GET /api/v1/lounge-bookings/qr/:qr_code_data - Get by QR code data")
 			loungeBookings.GET("/qr/:qr_code_data", loungeBookingHandler.GetLoungeBookingByQRCode)
 			logger.Info("  ✅ POST /api/v1/lounge-bookings/:id/check-in-out - Toggle check-in/check-out")

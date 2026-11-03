@@ -584,7 +584,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 // GetLoungeBookingByReference returns a booking by reference
 func (r *LoungeBookingRepository) GetLoungeBookingByReference(reference string) (*models.LoungeBooking, error) {
 	var bookingID uuid.UUID
-	query := `SELECT id FROM lounge_bookings WHERE booking_reference = $1`
+	query := `SELECT id FROM lounge_bookings WHERE booking_reference ILIKE $1 OR id::text = LOWER($1) OR qr_code_data ILIKE $1`
 	err := r.db.Get(&bookingID, query, reference)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -603,7 +603,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 		SELECT lb.id 
 		FROM lounge_bookings lb
 		LEFT JOIN bookings b ON lb.master_booking_id = b.id
-		WHERE b.booking_reference = $1 OR b.id::text = $1 OR lb.master_booking_id::text = $1
+		WHERE b.booking_reference ILIKE $1 OR b.id::text = LOWER($1) OR lb.master_booking_id::text = LOWER($1)
 	`
 	err := r.db.Select(&bookingIDs, query, masterReference)
 	if err != nil {
@@ -632,7 +632,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 func (r *LoungeBookingRepository) GetLoungeBookingByQRCode(qrCodeData string) (*models.LoungeBooking, error) {
 	log.Printf("[QR_BACKEND_REPO] Executing GetLoungeBookingByQRCode query for qr_code_data: %s", qrCodeData)
 	var bookingID uuid.UUID
-	query := `SELECT id FROM lounge_bookings WHERE qr_code_data = $1`
+	query := `SELECT id FROM lounge_bookings WHERE qr_code_data ILIKE $1 OR booking_reference ILIKE $1 OR id::text = LOWER($1)`
 	err := r.db.Get(&bookingID, query, qrCodeData)
 	if err == sql.ErrNoRows {
 		log.Printf("[QR_BACKEND_REPO] SQL sql.ErrNoRows: No lounge_booking record found for qr_code_data: %s", qrCodeData)

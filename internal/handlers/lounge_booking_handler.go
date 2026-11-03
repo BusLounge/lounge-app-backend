@@ -1146,15 +1146,28 @@ func (h *LoungeBookingHandler) GetLoungeBookingByReference(c *gin.Context) {
 		// Check ownership
 		if booking.UserID != userCtx.UserID {
 			owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+			staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
 			lounge, _ := h.loungeRepo.GetLoungeByID(booking.LoungeID)
 
 			isOwner := owner != nil && lounge != nil && lounge.LoungeOwnerID == owner.ID
+			isStaff := staff != nil && staff.LoungeID == booking.LoungeID
 
-			var isStaff bool
-			if !isOwner {
-				staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
-				if staff != nil && staff.LoungeID == booking.LoungeID {
-					isStaff = true
+			if !isOwner && !isStaff && booking.MasterBookingID != nil {
+				siblingBookings, _ := h.bookingRepo.GetLoungeBookingsByMasterReference(booking.MasterBookingID.String())
+				for _, sib := range siblingBookings {
+					if owner != nil {
+						sibLounge, _ := h.loungeRepo.GetLoungeByID(sib.LoungeID)
+						if sibLounge != nil && sibLounge.LoungeOwnerID == owner.ID {
+							isOwner = true
+							log.Printf("[QR_BACKEND_HANDLER] ✅ Authorized view via sibling master booking for owner %s", owner.ID)
+							break
+						}
+					}
+					if staff != nil && staff.LoungeID == sib.LoungeID {
+						isStaff = true
+						log.Printf("[QR_BACKEND_HANDLER] ✅ Authorized view via sibling master booking for staff %s", staff.ID)
+						break
+					}
 				}
 			}
 
@@ -1245,6 +1258,11 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 	}
 
 	if booking == nil {
+		// Direct reference fallback (e.g. LNG-... or booking ID)
+		booking, _ = h.bookingRepo.GetLoungeBookingByReference(qrCodeData)
+	}
+
+	if booking == nil {
 		log.Printf("[QR_ERROR] 🔍 NOT FOUND: No booking found for qr_code_data or master reference: '%s'", qrCodeData)
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "not_found",
@@ -1256,15 +1274,28 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 	// Check ownership
 	if booking.UserID != userCtx.UserID {
 		owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+		staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
 		lounge, _ := h.loungeRepo.GetLoungeByID(booking.LoungeID)
 
 		isOwner := owner != nil && lounge != nil && lounge.LoungeOwnerID == owner.ID
+		isStaff := staff != nil && staff.LoungeID == booking.LoungeID
 
-		var isStaff bool
-		if !isOwner {
-			staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
-			if staff != nil && staff.LoungeID == booking.LoungeID {
-				isStaff = true
+		if !isOwner && !isStaff && booking.MasterBookingID != nil {
+			siblingBookings, _ := h.bookingRepo.GetLoungeBookingsByMasterReference(booking.MasterBookingID.String())
+			for _, sib := range siblingBookings {
+				if owner != nil {
+					sibLounge, _ := h.loungeRepo.GetLoungeByID(sib.LoungeID)
+					if sibLounge != nil && sibLounge.LoungeOwnerID == owner.ID {
+						isOwner = true
+						log.Printf("[QR_BACKEND_HANDLER] ✅ Authorized QR view via sibling master booking for owner %s", owner.ID)
+						break
+					}
+				}
+				if staff != nil && staff.LoungeID == sib.LoungeID {
+					isStaff = true
+					log.Printf("[QR_BACKEND_HANDLER] ✅ Authorized QR view via sibling master booking for staff %s", staff.ID)
+					break
+				}
 			}
 		}
 
@@ -1280,6 +1311,85 @@ func (h *LoungeBookingHandler) GetLoungeBookingByQRCode(c *gin.Context) {
 
 	log.Printf("[QR_BACKEND_HANDLER] ✅ HTTP 200 OK -> Returning lounge booking %s for QR request", booking.ID)
 	c.JSON(http.StatusOK, booking)
+}
+
+// GetMasterLoungeBookings handles GET /api/v1/lounge-bookings/master/:reference
+// Retrieves all lounge bookings sharing the given master booking reference (BL-...) or UUID
+func (h *LoungeBookingHandler) GetMasterLoungeBookings(c *gin.Context) {
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		log.Printf("[QR_ERROR] Unauthorized GET master request: User context missing")
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error:   "unauthorized",
+			Message: "User context not found",
+		})
+		return
+	}
+
+	reference := c.Param("reference")
+	log.Printf("[QR_BACKEND_HANDLER] Received GetMasterLoungeBookings -> reference: '%s' | UserID: %s", reference, userCtx.UserID)
+
+	bookings, err := h.bookingRepo.GetLoungeBookingsByMasterReference(reference)
+	if err != nil || len(bookings) == 0 {
+		// Fallback: If single lounge reference (LNG-...) or booking ID passed, find its master booking
+		single, errSingle := h.bookingRepo.GetLoungeBookingByReference(reference)
+		if errSingle == nil && single != nil {
+			if single.MasterBookingID != nil {
+				bookings, _ = h.bookingRepo.GetLoungeBookingsByMasterReference(single.MasterBookingID.String())
+			}
+			if len(bookings) == 0 {
+				bookings = []*models.LoungeBooking{single}
+			}
+		}
+	}
+
+	if len(bookings) == 0 {
+		log.Printf("[QR_ERROR] 🔍 NOT FOUND: No lounge bookings found for master reference '%s'", reference)
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Error:   "not_found",
+			Message: "No bookings found for reference",
+		})
+		return
+	}
+
+	// Verify authorization: User must be passenger, owner of at least one lounge, or staff at at least one lounge
+	owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
+
+	authorized := false
+	for _, b := range bookings {
+		if b.UserID == userCtx.UserID {
+			authorized = true
+			break
+		}
+		if owner != nil {
+			lounge, _ := h.loungeRepo.GetLoungeByID(b.LoungeID)
+			if lounge != nil && lounge.LoungeOwnerID == owner.ID {
+				authorized = true
+				break
+			}
+		}
+		if staff != nil && staff.LoungeID == b.LoungeID {
+			authorized = true
+			break
+		}
+	}
+
+	if !authorized {
+		log.Printf("[QR_ERROR] ⛔ FORBIDDEN: User %s not authorized to view master bookings for '%s'", userCtx.UserID, reference)
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Error:   "forbidden",
+			Message: "Not authorized to view these bookings",
+		})
+		return
+	}
+
+	log.Printf("[QR_BACKEND_HANDLER] ✅ HTTP 200 OK -> Returning %d lounge bookings for master reference '%s'", len(bookings), reference)
+	c.JSON(http.StatusOK, gin.H{
+		"master_reference": reference,
+		"bookings":         bookings,
+		"total":            len(bookings),
+	})
 }
 
 // CancelLoungeBookingRequest represents the cancellation request
