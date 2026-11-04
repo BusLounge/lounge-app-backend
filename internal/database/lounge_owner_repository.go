@@ -306,6 +306,9 @@ func (r *LoungeOwnerRepository) CompleteRegistration(userID uuid.UUID) error {
 		return fmt.Errorf("failed to complete registration: %w", err)
 	}
 
+	// Also ensure users table profile_completed is true
+	_, _ = r.db.Exec(`UPDATE users SET profile_completed = true, updated_at = NOW() WHERE id = $1`, userID)
+
 	return nil
 }
 
@@ -337,6 +340,8 @@ func (r *LoungeOwnerRepository) UpdateVerificationStatus(id uuid.UUID, status st
 			verification_notes = $2,
 			verified_at = NOW(),
 			verified_by = $3,
+			registration_step = CASE WHEN $1 = 'approved' THEN 'completed' ELSE registration_step END,
+			profile_completed = CASE WHEN $1 = 'approved' THEN true ELSE profile_completed END,
 			updated_at = NOW()
 		WHERE id = $4
 	`
@@ -351,6 +356,14 @@ func (r *LoungeOwnerRepository) UpdateVerificationStatus(id uuid.UUID, status st
 	_, err := r.db.Exec(query, status, notesValue, verifiedBy, id)
 	if err != nil {
 		return fmt.Errorf("failed to update verification status: %w", err)
+	}
+
+	if status == "approved" {
+		_, _ = r.db.Exec(`
+			UPDATE users 
+			SET profile_completed = true, updated_at = NOW() 
+			WHERE id = (SELECT user_id FROM lounge_owners WHERE id = $1)
+		`, id)
 	}
 
 	return nil

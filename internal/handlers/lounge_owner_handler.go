@@ -150,6 +150,39 @@ func (h *LoungeOwnerHandler) SaveBusinessAndManagerInfo(c *gin.Context) {
 	})
 }
 
+// CompleteRegistration handles POST /api/v1/lounge-owner/register/complete
+func (h *LoungeOwnerHandler) CompleteRegistration(c *gin.Context) {
+	userCtx, exists := middleware.GetUserContext(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error:   "unauthorized",
+			Message: "User context not found",
+		})
+		return
+	}
+
+	err := h.loungeOwnerRepo.CompleteRegistration(userCtx.UserID)
+	if err != nil {
+		log.Printf("ERROR: Failed to complete registration for user %s: %v", userCtx.UserID, err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to complete registration",
+		})
+		return
+	}
+
+	// Also sync to users table profile_completed
+	_ = h.userRepo.SetProfileCompleted(userCtx.UserID, true)
+
+	log.Printf("INFO: Lounge owner registration completed for user %s", userCtx.UserID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":           "Registration completed successfully",
+		"registration_step": models.RegStepCompleted,
+		"profile_completed": true,
+	})
+}
+
 // ===================================================================
 // DEPRECATED: STEP 2: Upload Manager NIC Images
 // ===================================================================

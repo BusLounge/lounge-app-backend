@@ -710,6 +710,8 @@ func main() {
 				// Registration endpoints (no verification needed - for registration flow)
 				logger.Info("  ✅ POST /api/v1/lounge-owner/register/business-info")
 				loungeOwner.POST("/register/business-info", loungeOwnerHandler.SaveBusinessAndManagerInfo)
+				logger.Info("  ✅ POST /api/v1/lounge-owner/register/complete")
+				loungeOwner.POST("/register/complete", loungeOwnerHandler.CompleteRegistration)
 				logger.Info("  ✅ POST /api/v1/lounge-owner/register/upload-manager-nic")
 				loungeOwner.POST("/register/upload-manager-nic", loungeOwnerHandler.UploadManagerNIC)
 				logger.Info("  ✅ POST /api/v1/lounge-owner/register/add-lounge (requires approval)")
