@@ -93,35 +93,6 @@ func (h *LoungeBookingHandler) GetLoungeProducts(c *gin.Context) {
 	})
 }
 
-// CreateProductRequest represents the request to create a product
-type CreateProductRequest struct {
-	CategoryID             string   `json:"category_id" binding:"required"`
-	Name                   string   `json:"name" binding:"required"`
-	Description            *string  `json:"description,omitempty"`
-	ProductType            string   `json:"product_type"`
-	Price                  string   `json:"price" binding:"required"`
-	DiscountedPrice        *string  `json:"discounted_price,omitempty"`
-	ImageURL               *string  `json:"image_url,omitempty"`
-	ThumbnailURL           *string  `json:"thumbnail_url,omitempty"`
-	StockStatus            string   `json:"stock_status"`
-	StockQuantity          *int     `json:"stock_quantity,omitempty"`
-	IsAvailable            *bool    `json:"is_available,omitempty"`
-	IsPreOrderable         *bool    `json:"is_pre_orderable,omitempty"`
-	AvailableFrom          *string  `json:"available_from,omitempty"`
-	AvailableUntil         *string  `json:"available_until,omitempty"`
-	AvailableDays          []string `json:"available_days,omitempty"`
-	ServiceDurationMinutes *int     `json:"service_duration_minutes,omitempty"`
-	IsVegetarian           *bool    `json:"is_vegetarian,omitempty"`
-	IsVegan                *bool    `json:"is_vegan,omitempty"`
-	IsHalal                *bool    `json:"is_halal,omitempty"`
-	Allergens              []string `json:"allergens,omitempty"`
-	Calories               *int     `json:"calories,omitempty"`
-	DisplayOrder           int      `json:"display_order"`
-	IsFeatured             *bool    `json:"is_featured,omitempty"`
-	Tags                   []string `json:"tags,omitempty"`
-	PriceRateType          string   `json:"price_rate_type"`
-}
-
 func normalizePriceRateType(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "hourly", "hourly_rate":
@@ -135,209 +106,6 @@ func normalizePriceRateType(value string) string {
 	default:
 		return "fixed_rate"
 	}
-}
-
-// CreateProduct handles POST /api/v1/lounges/:id/products (lounge owner only)
-func (h *LoungeBookingHandler) CreateProduct(c *gin.Context) {
-	userCtx, exists := middleware.GetUserContext(c)
-	if !exists {
-		c.JSON(http.StatusUnauthorized, ErrorResponse{
-			Error:   "unauthorized",
-			Message: "User context not found",
-		})
-		return
-	}
-
-	loungeIDStr := c.Param("id")
-	loungeID, err := uuid.Parse(loungeIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "invalid_id",
-			Message: "Invalid lounge ID format",
-		})
-		return
-	}
-
-	// Verify ownership
-	owner, err := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
-	lounge, err := h.loungeRepo.GetLoungeByID(loungeID)
-	if err != nil || lounge == nil {
-		c.JSON(http.StatusNotFound, ErrorResponse{
-			Error:   "not_found",
-			Message: "Lounge not found",
-		})
-		return
-	}
-
-	isAuthorized := owner != nil && lounge.LoungeOwnerID == owner.ID
-
-	if !isAuthorized {
-		staff, staffErr := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
-		if staffErr != nil {
-			c.JSON(http.StatusInternalServerError, ErrorResponse{
-				Error:   "database_error",
-				Message: "Failed to verify staff access",
-			})
-			return
-		}
-
-		if staff == nil || staff.LoungeID != loungeID {
-			c.JSON(http.StatusForbidden, ErrorResponse{
-				Error:   "forbidden",
-				Message: "Not authorized",
-			})
-			return
-		}
-	}
-
-	var req CreateProductRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: "Invalid request body: " + err.Error(),
-		})
-		return
-	}
-
-	categoryID, err := uuid.Parse(req.CategoryID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "validation_error",
-			Message: "Invalid category_id format",
-		})
-		return
-	}
-
-	product := &models.LoungeProduct{
-		LoungeID:     loungeID,
-		CategoryID:   categoryID,
-		Name:         req.Name,
-		Price:        req.Price,
-		DisplayOrder: req.DisplayOrder,
-	}
-
-	// Set optional fields
-	if req.Description != nil {
-		product.Description = req.Description
-	}
-	if req.ProductType != "" {
-		product.ProductType = models.LoungeProductType(req.ProductType)
-	} else {
-		product.ProductType = models.LoungeProductTypeProduct
-	}
-	if req.DiscountedPrice != nil {
-		product.DiscountedPrice = req.DiscountedPrice
-	}
-	if req.ImageURL != nil {
-		product.ImageURL = req.ImageURL
-	}
-	if req.ThumbnailURL != nil {
-		product.ThumbnailURL = req.ThumbnailURL
-	}
-	if req.StockStatus != "" {
-		product.StockStatus = models.LoungeProductStockStatus(req.StockStatus)
-	} else {
-		product.StockStatus = models.LoungeProductStockStatusInStock
-	}
-	if req.StockQuantity != nil {
-		product.StockQuantity = req.StockQuantity
-	}
-	if req.IsAvailable != nil {
-		product.IsAvailable = *req.IsAvailable
-	} else {
-		product.IsAvailable = true
-	}
-	if req.IsPreOrderable != nil {
-		product.IsPreOrderable = *req.IsPreOrderable
-	}
-	if req.AvailableFrom != nil {
-		product.AvailableFrom = req.AvailableFrom
-	}
-	if req.AvailableUntil != nil {
-		product.AvailableUntil = req.AvailableUntil
-	}
-	if len(req.AvailableDays) > 0 {
-		product.AvailableDays = req.AvailableDays
-	}
-	if req.ServiceDurationMinutes != nil {
-		product.ServiceDurationMinutes = req.ServiceDurationMinutes
-	}
-	if req.IsVegetarian != nil {
-		product.IsVegetarian = *req.IsVegetarian
-	}
-	if req.IsVegan != nil {
-		product.IsVegan = *req.IsVegan
-	}
-	if req.IsHalal != nil {
-		product.IsHalal = *req.IsHalal
-	}
-	if len(req.Allergens) > 0 {
-		product.Allergens = req.Allergens
-	}
-	if req.Calories != nil {
-		product.Calories = req.Calories
-	}
-	if req.IsFeatured != nil {
-		product.IsFeatured = *req.IsFeatured
-	}
-	if len(req.Tags) > 0 {
-		product.Tags = req.Tags
-	}
-	normalizedCreatePriceRateType := normalizePriceRateType(req.PriceRateType)
-	if normalizedCreatePriceRateType != "" {
-		product.PriceRateType = normalizedCreatePriceRateType
-	} else {
-		product.PriceRateType = "fixed_rate"
-	}
-	product.IsActive = true
-
-	if err := h.bookingRepo.CreateProduct(product); err != nil {
-		log.Printf("ERROR: Failed to create product: %v", err)
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "creation_failed",
-			Message: "Failed to create product",
-		})
-		return
-	}
-
-	// Return full product object
-	c.JSON(http.StatusCreated, gin.H{
-		"message": "Product created successfully",
-		"product": gin.H{
-			"id":                       product.ID.String(),
-			"lounge_id":                product.LoungeID.String(),
-			"category_id":              product.CategoryID.String(),
-			"name":                     product.Name,
-			"description":              product.Description,
-			"product_type":             string(product.ProductType),
-			"price":                    product.Price,
-			"price_rate_type":          product.PriceRateType,
-			"discounted_price":         product.DiscountedPrice,
-			"image_url":                product.ImageURL,
-			"thumbnail_url":            product.ThumbnailURL,
-			"stock_status":             string(product.StockStatus),
-			"stock_quantity":           product.StockQuantity,
-			"is_available":             product.IsAvailable,
-			"is_pre_orderable":         product.IsPreOrderable,
-			"available_from":           product.AvailableFrom,
-			"available_until":          product.AvailableUntil,
-			"available_days":           product.AvailableDays,
-			"service_duration_minutes": product.ServiceDurationMinutes,
-			"is_vegetarian":            product.IsVegetarian,
-			"is_vegan":                 product.IsVegan,
-			"is_halal":                 product.IsHalal,
-			"allergens":                product.Allergens,
-			"calories":                 product.Calories,
-			"display_order":            product.DisplayOrder,
-			"is_featured":              product.IsFeatured,
-			"tags":                     product.Tags,
-			"average_rating":           product.AverageRating,
-			"total_reviews":            product.TotalReviews,
-			"is_active":                product.IsActive,
-			"created_at":               product.CreatedAt,
-			"updated_at":               product.UpdatedAt,
-		},
-	})
 }
 
 // UpdateProductRequest represents the request to update a product
@@ -1331,11 +1099,14 @@ func (h *LoungeBookingHandler) GetMasterLoungeBookings(c *gin.Context) {
 
 	bookings, err := h.bookingRepo.GetLoungeBookingsByMasterReference(reference)
 	if err != nil || len(bookings) == 0 {
-		// Fallback: If single lounge reference (LNG-...) or booking ID passed, find its master booking
+		// Fallback: If single lounge reference (LNG-...), QR code, or booking ID passed, find its master booking
 		single, errSingle := h.bookingRepo.GetLoungeBookingByReference(reference)
 		if errSingle == nil && single != nil {
 			if single.MasterBookingID != nil {
 				bookings, _ = h.bookingRepo.GetLoungeBookingsByMasterReference(single.MasterBookingID.String())
+			}
+			if len(bookings) == 0 && single.BusBookingID != nil {
+				bookings, _ = h.bookingRepo.GetLoungeBookingsByMasterReference(single.BusBookingID.String())
 			}
 			if len(bookings) == 0 {
 				bookings = []*models.LoungeBooking{single}
@@ -2010,13 +1781,23 @@ func (h *LoungeBookingHandler) CompleteLoungeBooking(c *gin.Context) {
 		return
 	}
 
-	// Verify user is lounge owner/staff
+	// Verify user is lounge owner or staff for this booking's lounge
 	owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
 	lounge, _ := h.loungeRepo.GetLoungeByID(booking.LoungeID)
-	if owner == nil || lounge == nil || lounge.LoungeOwnerID != owner.ID {
+	isOwner := owner != nil && lounge != nil && lounge.LoungeOwnerID == owner.ID
+
+	var isStaff bool
+	if !isOwner {
+		staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
+		if staff != nil && staff.LoungeID == booking.LoungeID {
+			isStaff = true
+		}
+	}
+
+	if !isOwner && !isStaff {
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Error:   "forbidden",
-			Message: "Not authorized",
+			Message: "Not authorized to complete booking for this lounge",
 		})
 		return
 	}
@@ -2428,8 +2209,44 @@ func (h *LoungeBookingHandler) UpdateOrderStatus(c *gin.Context) {
 		return
 	}
 
-	// TODO: Verify user is lounge owner/staff for this order's lounge
-	_ = userCtx
+	order, err := h.bookingRepo.GetLoungeOrderByID(orderID)
+	if err != nil {
+		log.Printf("ERROR: Failed to retrieve order: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to retrieve order",
+		})
+		return
+	}
+	if order == nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Error:   "not_found",
+			Message: "Order not found",
+		})
+		return
+	}
+
+	// Verify user is lounge owner or staff for this order's lounge
+	owner, _ := h.loungeOwnerRepo.GetLoungeOwnerByUserID(userCtx.UserID)
+	lounge, _ := h.loungeRepo.GetLoungeByID(order.LoungeID)
+	isOwner := owner != nil && lounge != nil && lounge.LoungeOwnerID == owner.ID
+
+	var isStaff bool
+	if !isOwner {
+		staff, _ := h.loungeStaffRepo.GetApprovedStaffaByUserID(userCtx.UserID)
+		if staff != nil && staff.LoungeID == order.LoungeID {
+			isStaff = true
+		}
+	}
+
+	if !isOwner && !isStaff {
+		log.Printf("[SECURITY] User %s forbidden to update order %s for lounge %s", userCtx.UserID, orderID, order.LoungeID)
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Error:   "forbidden",
+			Message: "Not authorized to manage orders for this lounge",
+		})
+		return
+	}
 
 	if err := h.bookingRepo.UpdateOrderStatus(orderID, models.LoungeOrderStatus(req.Status)); err != nil {
 		log.Printf("ERROR: Failed to update order status: %v", err)

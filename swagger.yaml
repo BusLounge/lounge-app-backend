@@ -9585,54 +9585,6 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
-    post:
-      summary: Create lounge product
-      description: 'Add a new product to a lounge''s menu.
-
-        Requires lounge owner authentication.
-
-        '
-      operationId: createLoungeProduct
-      tags:
-      - Lounge Products
-      security:
-      - BearerAuth: []
-      parameters:
-      - name: lounge_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateLoungeProductRequest'
-      responses:
-        '201':
-          description: Product created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Product created successfully
-                  product:
-                    $ref: '#/components/schemas/LoungeProduct'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
   /api/v1/lounges/{lounge_id}/products/{product_id}:
     put:
       summary: Update lounge product

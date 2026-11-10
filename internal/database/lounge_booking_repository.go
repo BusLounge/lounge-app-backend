@@ -301,51 +301,6 @@ func (r *LoungeBookingRepository) GetProductByID(productID uuid.UUID) (*models.L
 	return &p, nil
 }
 
-// CreateProduct creates a new product for a lounge
-func (r *LoungeBookingRepository) CreateProduct(product *models.LoungeProduct) error {
-	product.ID = uuid.New()
-	product.CreatedAt = time.Now()
-	product.UpdatedAt = time.Now()
-
-	// Set defaults
-	if product.StockStatus == "" {
-		product.StockStatus = models.LoungeProductStockStatusInStock
-	}
-	if product.ProductType == "" {
-		product.ProductType = models.LoungeProductTypeProduct
-	}
-	if strings.TrimSpace(product.PriceRateType) == "" {
-		product.PriceRateType = "fixed_rate"
-	}
-	product.IsActive = true
-
-	query := `
-		INSERT INTO lounge_products (
-			id, lounge_id, category_id, name, description, product_type,
-			price, discounted_price, image_url, thumbnail_url,
-			stock_status, stock_quantity, is_available, is_pre_orderable,
-			available_from, available_until, available_days,
-			service_duration_minutes, is_vegetarian, is_vegan, is_halal,
-			allergens, calories, display_order, is_featured, tags,
-			is_active, created_at, updated_at, price_rate_type
-		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30
-		)
-	`
-	_, err := r.db.Exec(query,
-		product.ID, product.LoungeID, product.CategoryID, product.Name, product.Description, product.ProductType,
-		product.Price, product.DiscountedPrice, product.ImageURL, product.ThumbnailURL,
-		product.StockStatus, product.StockQuantity, product.IsAvailable, product.IsPreOrderable,
-		product.AvailableFrom, product.AvailableUntil, pq.Array(product.AvailableDays),
-		product.ServiceDurationMinutes, product.IsVegetarian, product.IsVegan, product.IsHalal,
-		pq.Array(product.Allergens), product.Calories, product.DisplayOrder, product.IsFeatured, pq.Array(product.Tags),
-		product.IsActive, product.CreatedAt, product.UpdatedAt, product.PriceRateType,
-	)
-	return err
-}
-
 // UpdateProduct updates a product
 func (r *LoungeBookingRepository) UpdateProduct(product *models.LoungeProduct) error {
 	product.UpdatedAt = time.Now()
@@ -510,7 +465,9 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 			l.lounge_name, l.address,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+				   OR tb.booking_id = lb.id
 			) AS has_transport,
 			COALESCE(tb.vehicle_type, '') AS vehicle_type,
 			COALESCE(ltl.location, '') AS pickup_location_name,
@@ -522,7 +479,15 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 			) AS driver_assignment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
-		LEFT JOIN transport_bookings tb ON tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+		LEFT JOIN LATERAL (
+			SELECT tb_inner.vehicle_type, tb_inner.pickup_location_id
+			FROM transport_bookings tb_inner
+			WHERE (tb_inner.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+			   OR (tb_inner.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+			   OR tb_inner.booking_id = lb.id
+			ORDER BY tb_inner.created_at DESC
+			LIMIT 1
+		) tb ON TRUE
 		LEFT JOIN lounge_transport_locations ltl ON ltl.id = tb.pickup_location_id
 		WHERE lb.id = $1
 	`
@@ -595,15 +560,72 @@ func (r *LoungeBookingRepository) GetLoungeBookingByReference(reference string) 
 	return r.GetLoungeBookingByID(bookingID)
 }
 
-// GetLoungeBookingsByMasterReference returns all lounge bookings for a given master booking reference (BL-...)
+// GetLoungeBookingsByMasterReference returns all lounge bookings for a given master reference, booking reference, QR code data, or booking UUID
 func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterReference string) ([]*models.LoungeBooking, error) {
 	log.Printf("[QR_BACKEND_REPO] Executing GetLoungeBookingsByMasterReference query for parameter: %s", masterReference)
 	var bookingIDs []uuid.UUID
 	query := `
-		SELECT lb.id 
+		WITH matched_sources AS (
+			-- Any direct lounge booking matching the parameter
+			SELECT id, master_booking_id, bus_booking_id, user_id, scheduled_arrival
+			FROM lounge_bookings
+			WHERE booking_reference ILIKE $1 
+			   OR qr_code_data ILIKE $1 
+			   OR id::text = LOWER($1)
+		),
+		matched_intents AS (
+			-- Any booking intent matching directly or via matched lounge bookings
+			SELECT id, bus_booking_id, pre_lounge_booking_id, post_lounge_booking_id
+			FROM booking_intents
+			WHERE id::text = LOWER($1)
+			   OR bus_booking_id::text = LOWER($1)
+			   OR pre_lounge_booking_id::text = LOWER($1)
+			   OR post_lounge_booking_id::text = LOWER($1)
+			   OR pre_lounge_booking_id IN (SELECT id FROM matched_sources)
+			   OR post_lounge_booking_id IN (SELECT id FROM matched_sources)
+		),
+		matched_masters AS (
+			-- Master booking IDs from bookings table or bus_bookings table
+			SELECT id FROM bookings WHERE booking_reference ILIKE $1 OR id::text = LOWER($1)
+			UNION
+			SELECT booking_id FROM bus_bookings WHERE id::text = LOWER($1) OR qr_code_data ILIKE $1
+			UNION
+			SELECT bb.booking_id FROM bus_bookings bb 
+			WHERE bb.id IN (SELECT bus_booking_id FROM matched_sources WHERE bus_booking_id IS NOT NULL)
+			   OR bb.id IN (SELECT bus_booking_id FROM matched_intents WHERE bus_booking_id IS NOT NULL)
+		)
+		SELECT DISTINCT lb.id 
 		FROM lounge_bookings lb
 		LEFT JOIN bookings b ON lb.master_booking_id = b.id
-		WHERE b.booking_reference ILIKE $1 OR b.id::text = LOWER($1) OR lb.master_booking_id::text = LOWER($1)
+		WHERE 
+			-- 1. Direct match on master booking table or reference
+			b.booking_reference ILIKE $1
+			OR b.id::text = LOWER($1)
+			OR lb.master_booking_id::text = LOWER($1)
+			OR lb.master_booking_id IN (SELECT id FROM matched_masters)
+			
+			-- 2. Direct match on bus booking ID or shared bus booking
+			OR lb.bus_booking_id::text = LOWER($1)
+			OR (lb.bus_booking_id IS NOT NULL AND lb.bus_booking_id IN (
+				SELECT bus_booking_id FROM matched_sources WHERE bus_booking_id IS NOT NULL
+				UNION
+				SELECT bus_booking_id FROM matched_intents WHERE bus_booking_id IS NOT NULL
+			))
+
+			-- 3. Match sibling lounge bookings from same booking intent
+			OR lb.id IN (SELECT pre_lounge_booking_id FROM matched_intents WHERE pre_lounge_booking_id IS NOT NULL)
+			OR lb.id IN (SELECT post_lounge_booking_id FROM matched_intents WHERE post_lounge_booking_id IS NOT NULL)
+
+			-- 4. Match siblings from same master_booking_id
+			OR (lb.master_booking_id IS NOT NULL AND lb.master_booking_id IN (
+				SELECT master_booking_id FROM matched_sources WHERE master_booking_id IS NOT NULL
+			))
+
+			-- 5. Direct lounge booking match
+			OR lb.booking_reference ILIKE $1
+			OR lb.qr_code_data ILIKE $1
+			OR lb.id::text = LOWER($1)
+		ORDER BY lb.id
 	`
 	err := r.db.Select(&bookingIDs, query, masterReference)
 	if err != nil {
@@ -656,7 +678,9 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserID(userID uuid.UUID, li
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+				   OR tb.booking_id = lb.id
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -684,7 +708,9 @@ func (r *LoungeBookingRepository) GetUpcomingLoungeBookingsByUserID(userID uuid.
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+				   OR tb.booking_id = lb.id
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -713,7 +739,9 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserIDAndStatus(userID uuid
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+				   OR tb.booking_id = lb.id
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -742,7 +770,9 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByLoungeID(loungeID uuid.UUID
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+				   OR tb.booking_id = lb.id
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -812,7 +842,9 @@ func (r *LoungeBookingRepository) GetTodaysLoungeBookings(loungeID uuid.UUID) ([
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL
+				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+				   OR tb.booking_id = lb.id
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -1059,6 +1091,27 @@ func (r *LoungeBookingRepository) UpdateOrderStatus(orderID uuid.UUID, status mo
 	query := `UPDATE lounge_orders SET order_status = $2, updated_at = NOW() WHERE id = $1`
 	_, err := r.db.Exec(query, orderID, status)
 	return err
+}
+
+// GetLoungeOrderByID retrieves an order by its ID
+func (r *LoungeBookingRepository) GetLoungeOrderByID(orderID uuid.UUID) (*models.LoungeOrder, error) {
+	var order models.LoungeOrder
+	query := `
+		SELECT id, lounge_booking_id, lounge_id, order_reference AS order_number, subtotal,
+		       discount_amount, total_amount, order_status AS status, payment_status, 
+		       payment_method, special_instructions AS notes, taken_by_user_id AS prepared_by_staff, served_by_user_id AS served_by_staff, 
+		       created_at, updated_at
+		FROM lounge_orders
+		WHERE id = $1
+	`
+	err := r.db.Get(&order, query, orderID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &order, nil
 }
 
 // ============================================================================

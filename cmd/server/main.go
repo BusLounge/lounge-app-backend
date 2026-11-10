@@ -899,8 +899,6 @@ func main() {
 			// Products for a lounge (anyone can view, owner can manage)
 			logger.Info("  ✅ GET /api/v1/lounges/:id/products (read-only, no approval needed)")
 			loungesProtectedProducts.GET("/:id/products", loungeBookingHandler.GetLoungeProducts)
-			logger.Info("  ✅ POST /api/v1/lounges/:id/products (requires approval)")
-			loungesProtectedProducts.POST("/:id/products", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), loungeBookingHandler.CreateProduct)
 
 			// Special Packages for a lounge (New Endpoints)
 			logger.Info("  ✅ GET /api/v1/marketplace/special-packages/lounge/:lounge_id (read-only, no approval needed)")
