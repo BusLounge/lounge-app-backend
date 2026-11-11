@@ -575,7 +575,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 	query := `
 		WITH matched_sources AS (
 			-- Any direct lounge booking matching the parameter
-			SELECT id, master_booking_id, bus_booking_id, user_id, scheduled_arrival, created_at
+			SELECT id, master_booking_id, bus_booking_id, user_id, scheduled_arrival, created_at, primary_guest_phone, primary_guest_name
 			FROM lounge_bookings
 			WHERE booking_reference ILIKE $1 
 			   OR qr_code_data ILIKE $1 
@@ -644,7 +644,19 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 				)
 			))
 
-			-- 6. Direct lounge booking match
+			-- 6. Match siblings from same guest phone booked for the same travel date or within 24 hours
+			OR (lb.primary_guest_phone != '' AND lb.primary_guest_phone IN (
+				SELECT primary_guest_phone FROM matched_sources 
+				WHERE primary_guest_phone IS NOT NULL AND primary_guest_phone != ''
+			) AND (
+				DATE(lb.scheduled_arrival) IN (SELECT DATE(scheduled_arrival) FROM matched_sources)
+				OR EXISTS (
+					SELECT 1 FROM matched_sources ms 
+					WHERE ABS(EXTRACT(EPOCH FROM (lb.created_at - ms.created_at))) < 86400
+				)
+			))
+
+			-- 7. Direct lounge booking match
 			OR lb.booking_reference ILIKE $1
 			OR lb.qr_code_data ILIKE $1
 			OR lb.id::text = LOWER($1)

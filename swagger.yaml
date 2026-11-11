@@ -10117,6 +10117,47 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+  /api/v1/lounge-bookings/master/{reference}:
+    get:
+      summary: Get all lounge bookings by master reference
+      description: 'Retrieve all lounge bookings linked to a master booking reference (BL-...), lounge reference (LNG-...), or QR code data. Returns all pre-trip and post-trip lounge bookings in the passenger itinerary.'
+      operationId: getMasterLoungeBookings
+      tags:
+      - Lounge Bookings
+      security:
+      - BearerAuth: []
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+        example: BL-20261110-782BD6
+        description: Master booking reference (BL-...), lounge reference (LNG-...), or QR code data
+      responses:
+        '200':
+          description: Master lounge bookings retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  master_reference:
+                    type: string
+                  total:
+                    type: integer
+                  bookings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LoungeBookingDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/lounge-bookings/qr/{qr_code_data}:
     get:
       summary: Get lounge booking by QR code data
