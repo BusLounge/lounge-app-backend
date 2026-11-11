@@ -476,9 +476,16 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 				 WHERE lbda.lounge_booking_id = lb.id 
 				 ORDER BY lbda.created_at DESC LIMIT 1),
 				''
-			) AS driver_assignment_status
+			) AS driver_assignment_status,
+			COALESCE(b_master.booking_reference, '') AS master_booking_reference
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
+		LEFT JOIN bookings b_master ON (
+			(lb.master_booking_id IS NOT NULL AND b_master.id = lb.master_booking_id)
+			OR (lb.bus_booking_id IS NOT NULL AND b_master.id = (
+				SELECT bb_sub.booking_id FROM bus_bookings bb_sub WHERE bb_sub.id = lb.bus_booking_id LIMIT 1
+			))
+		)
 		LEFT JOIN LATERAL (
 			SELECT tb_inner.vehicle_type, tb_inner.pickup_location_id
 			FROM transport_bookings tb_inner
@@ -507,6 +514,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 		&booking.VehicleType,
 		&booking.PickupLocationName,
 		&booking.DriverAssignmentStatus,
+		&booking.MasterBookingReference,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -567,14 +575,33 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 	query := `
 		WITH matched_sources AS (
 			-- Any direct lounge booking matching the parameter
-			SELECT id, master_booking_id, bus_booking_id, user_id, scheduled_arrival
+			SELECT id, master_booking_id, bus_booking_id, user_id, scheduled_arrival, created_at
 			FROM lounge_bookings
 			WHERE booking_reference ILIKE $1 
 			   OR qr_code_data ILIKE $1 
 			   OR id::text = LOWER($1)
 		),
+		matched_masters AS (
+			-- Master booking IDs from bookings table or bus_bookings table or matched lounge bookings
+			SELECT id FROM bookings WHERE booking_reference ILIKE $1 OR id::text = LOWER($1)
+			UNION
+			SELECT master_booking_id FROM matched_sources WHERE master_booking_id IS NOT NULL
+			UNION
+			SELECT booking_id FROM bus_bookings WHERE id::text = LOWER($1) OR qr_code_data ILIKE $1
+			UNION
+			SELECT bb.booking_id FROM bus_bookings bb 
+			WHERE bb.id IN (SELECT bus_booking_id FROM matched_sources WHERE bus_booking_id IS NOT NULL)
+		),
+		matched_bus_bookings AS (
+			-- Bus booking IDs
+			SELECT id FROM bus_bookings WHERE id::text = LOWER($1) OR qr_code_data ILIKE $1
+			UNION
+			SELECT id FROM bus_bookings WHERE booking_id IN (SELECT id FROM matched_masters)
+			UNION
+			SELECT bus_booking_id FROM matched_sources WHERE bus_booking_id IS NOT NULL
+		),
 		matched_intents AS (
-			-- Any booking intent matching directly or via matched lounge bookings
+			-- Any booking intent matching directly or via matched lounge bookings or bus bookings
 			SELECT id, bus_booking_id, pre_lounge_booking_id, post_lounge_booking_id
 			FROM booking_intents
 			WHERE id::text = LOWER($1)
@@ -583,16 +610,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 			   OR post_lounge_booking_id::text = LOWER($1)
 			   OR pre_lounge_booking_id IN (SELECT id FROM matched_sources)
 			   OR post_lounge_booking_id IN (SELECT id FROM matched_sources)
-		),
-		matched_masters AS (
-			-- Master booking IDs from bookings table or bus_bookings table
-			SELECT id FROM bookings WHERE booking_reference ILIKE $1 OR id::text = LOWER($1)
-			UNION
-			SELECT booking_id FROM bus_bookings WHERE id::text = LOWER($1) OR qr_code_data ILIKE $1
-			UNION
-			SELECT bb.booking_id FROM bus_bookings bb 
-			WHERE bb.id IN (SELECT bus_booking_id FROM matched_sources WHERE bus_booking_id IS NOT NULL)
-			   OR bb.id IN (SELECT bus_booking_id FROM matched_intents WHERE bus_booking_id IS NOT NULL)
+			   OR bus_booking_id IN (SELECT id FROM matched_bus_bookings)
 		)
 		SELECT DISTINCT lb.id 
 		FROM lounge_bookings lb
@@ -602,15 +620,11 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 			b.booking_reference ILIKE $1
 			OR b.id::text = LOWER($1)
 			OR lb.master_booking_id::text = LOWER($1)
-			OR lb.master_booking_id IN (SELECT id FROM matched_masters)
+			OR (lb.master_booking_id IS NOT NULL AND lb.master_booking_id IN (SELECT id FROM matched_masters))
 			
 			-- 2. Direct match on bus booking ID or shared bus booking
 			OR lb.bus_booking_id::text = LOWER($1)
-			OR (lb.bus_booking_id IS NOT NULL AND lb.bus_booking_id IN (
-				SELECT bus_booking_id FROM matched_sources WHERE bus_booking_id IS NOT NULL
-				UNION
-				SELECT bus_booking_id FROM matched_intents WHERE bus_booking_id IS NOT NULL
-			))
+			OR (lb.bus_booking_id IS NOT NULL AND lb.bus_booking_id IN (SELECT id FROM matched_bus_bookings))
 
 			-- 3. Match sibling lounge bookings from same booking intent
 			OR lb.id IN (SELECT pre_lounge_booking_id FROM matched_intents WHERE pre_lounge_booking_id IS NOT NULL)
@@ -621,7 +635,16 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByMasterReference(masterRefer
 				SELECT master_booking_id FROM matched_sources WHERE master_booking_id IS NOT NULL
 			))
 
-			-- 5. Direct lounge booking match
+			-- 5. Match siblings from same user booked for the same travel date or checkout session
+			OR (lb.user_id IN (SELECT user_id FROM matched_sources) AND (
+				DATE(lb.scheduled_arrival) IN (SELECT DATE(scheduled_arrival) FROM matched_sources)
+				OR EXISTS (
+					SELECT 1 FROM matched_sources ms 
+					WHERE ABS(EXTRACT(EPOCH FROM (lb.created_at - ms.created_at))) < 1800
+				)
+			))
+
+			-- 6. Direct lounge booking match
 			OR lb.booking_reference ILIKE $1
 			OR lb.qr_code_data ILIKE $1
 			OR lb.id::text = LOWER($1)

@@ -288,6 +288,7 @@ type LoungeBooking struct {
 	VehicleType  string               `db:"vehicle_type" json:"vehicle_type,omitempty"`
 	PickupLocationName string         `db:"pickup_location_name" json:"pickup_location_name,omitempty"`
 	DriverAssignmentStatus string     `db:"driver_assignment_status" json:"driver_assignment_status,omitempty"`
+	MasterBookingReference string     `db:"master_booking_reference" json:"master_booking_reference,omitempty"`
 }
 
 // MarshalJSON customizes JSON encoding for LoungeBooking

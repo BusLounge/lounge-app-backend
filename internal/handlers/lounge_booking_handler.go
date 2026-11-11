@@ -1114,6 +1114,25 @@ func (h *LoungeBookingHandler) GetMasterLoungeBookings(c *gin.Context) {
 		}
 	}
 
+	// Sibling expansion: If only 1 booking was found, or if reference is a single lounge ref / QR code,
+	// try to find all sibling bookings using the master booking reference or ID from the single booking
+	if len(bookings) == 1 {
+		single := bookings[0]
+		var siblingBookings []*models.LoungeBooking
+		if single.MasterBookingReference != "" && !strings.EqualFold(single.MasterBookingReference, reference) {
+			siblingBookings, _ = h.bookingRepo.GetLoungeBookingsByMasterReference(single.MasterBookingReference)
+		}
+		if len(siblingBookings) <= 1 && single.MasterBookingID != nil && single.MasterBookingID.String() != reference {
+			siblingBookings, _ = h.bookingRepo.GetLoungeBookingsByMasterReference(single.MasterBookingID.String())
+		}
+		if len(siblingBookings) <= 1 && single.BusBookingID != nil && single.BusBookingID.String() != reference {
+			siblingBookings, _ = h.bookingRepo.GetLoungeBookingsByMasterReference(single.BusBookingID.String())
+		}
+		if len(siblingBookings) > len(bookings) {
+			bookings = siblingBookings
+		}
+	}
+
 	if len(bookings) == 0 {
 		log.Printf("[QR_ERROR] 🔍 NOT FOUND: No lounge bookings found for master reference '%s'", reference)
 		c.JSON(http.StatusNotFound, ErrorResponse{
@@ -1155,9 +1174,17 @@ func (h *LoungeBookingHandler) GetMasterLoungeBookings(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[QR_BACKEND_HANDLER] ✅ HTTP 200 OK -> Returning %d lounge bookings for master reference '%s'", len(bookings), reference)
+	masterRef := reference
+	for _, b := range bookings {
+		if b.MasterBookingReference != "" {
+			masterRef = b.MasterBookingReference
+			break
+		}
+	}
+
+	log.Printf("[QR_BACKEND_HANDLER] ✅ HTTP 200 OK -> Returning %d lounge bookings for master reference '%s' (effective: '%s')", len(bookings), reference, masterRef)
 	c.JSON(http.StatusOK, gin.H{
-		"master_reference": reference,
+		"master_reference": masterRef,
 		"bookings":         bookings,
 		"total":            len(bookings),
 	})
