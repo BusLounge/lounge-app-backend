@@ -783,6 +783,11 @@ func main() {
 		// Lounge Staff routes (protected)
 		logger.Info("🏨 Registering Lounge Staff routes...")
 		loungeStaff := v1.Group("/lounge-staff")
+
+		// Public lounge-staff routes (no auth required) — must be registered BEFORE the auth middleware
+		logger.Info("  ✅ POST /api/v1/lounge-staff/check-phone (public)")
+		loungeStaff.POST("/check-phone", loungeStaffHandler.CheckPhoneExists)
+
 		loungeStaff.Use(middleware.AuthMiddleware(jwtService))
 		{
 			// Profile endpoints

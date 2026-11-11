@@ -1182,6 +1182,94 @@ func (h *LoungeStaffHandler) GetLoungeBookingsForStaff(c *gin.Context) {
 }
 
 // ===================================================================
+// CHECK PHONE EXISTS (Public endpoint - no auth required)
+// ===================================================================
+
+// CheckPhoneExistsRequest represents the check-phone request body
+type CheckPhoneExistsRequest struct {
+	Phone string `json:"phone" binding:"required"`
+}
+
+// CheckPhoneExistsResponse represents the check-phone response body
+type CheckPhoneExistsResponse struct {
+	Exists         bool   `json:"exists"`
+	ApprovalStatus string `json:"approval_status,omitempty"` // pending | approved | declined
+	Message        string `json:"message"`
+}
+
+// CheckPhoneExists handles POST /api/v1/lounge-staff/check-phone (public, no auth)
+// Checks whether a phone number is already registered as a lounge staff member.
+// The phone is looked up in the users table first; if a matching user is found,
+// we then check whether that user has a lounge_staff record.
+func (h *LoungeStaffHandler) CheckPhoneExists(c *gin.Context) {
+	var req CheckPhoneExistsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "validation_error",
+			Message: "phone is required",
+		})
+		return
+	}
+
+	// Validate & normalise the phone number using the shared validator
+	normalizedPhone, err := h.phoneValidator.Validate(req.Phone)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_phone",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Step 1: check whether a user with this phone number exists
+	existingUser, err := h.userRepo.GetUserByPhone(normalizedPhone)
+	if err != nil {
+		log.Printf("ERROR: CheckPhoneExists – failed to look up phone %s: %v", normalizedPhone, err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to check phone number",
+		})
+		return
+	}
+
+	if existingUser == nil {
+		// No user at all → phone is free to register
+		c.JSON(http.StatusOK, CheckPhoneExistsResponse{
+			Exists:  false,
+			Message: "Phone number is available for registration",
+		})
+		return
+	}
+
+	// Step 2: user exists – check whether they are already a lounge_staff member
+	staff, err := h.staffRepo.GetStaffByUserID(existingUser.ID)
+	if err != nil {
+		log.Printf("ERROR: CheckPhoneExists – failed to look up staff for user %s: %v", existingUser.ID, err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "database_error",
+			Message: "Failed to check staff registration",
+		})
+		return
+	}
+
+	if staff == nil {
+		// User exists in the system (maybe another role) but is NOT a lounge staff member
+		c.JSON(http.StatusOK, CheckPhoneExistsResponse{
+			Exists:  false,
+			Message: "Phone number is available for lounge staff registration",
+		})
+		return
+	}
+
+	// User is already registered as lounge staff – return their current approval status
+	c.JSON(http.StatusOK, CheckPhoneExistsResponse{
+		Exists:         true,
+		ApprovalStatus: string(staff.ApprovalStatus),
+		Message:        "Phone number is already registered as lounge staff",
+	})
+}
+
+// ===================================================================
 // UPDATE LOUNGE STAFF PROFILE
 // ===================================================================
 
