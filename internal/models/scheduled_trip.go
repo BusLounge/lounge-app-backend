@@ -210,10 +210,13 @@ func (s *ScheduledTrip) CanAcceptBooking(seats int) bool {
 // ScheduledTripWithRouteInfo extends ScheduledTrip with route details
 type ScheduledTripWithRouteInfo struct {
 	ScheduledTrip
-	RouteNumber     *string `json:"route_number,omitempty"`
-	OriginCity      *string `json:"origin_city,omitempty"`
-	DestinationCity *string `json:"destination_city,omitempty"`
-	IsUpDirection   *bool   `json:"is_up_direction,omitempty"`
+	RouteNumber           *string `json:"route_number,omitempty"`
+	OriginCity            *string `json:"origin_city,omitempty"`
+	DestinationCity       *string `json:"destination_city,omitempty"`
+	IsUpDirection         *bool   `json:"is_up_direction,omitempty"`
+	BusRegistrationNumber *string `json:"bus_registration_number,omitempty"`
+	BusNumber             *string `json:"bus_number,omitempty"`
+	AvailableSeats        *int    `json:"available_seats,omitempty"`
 }
 
 // StaffDetails contains basic staff information for trip display

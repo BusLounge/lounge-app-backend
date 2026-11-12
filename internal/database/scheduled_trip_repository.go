@@ -275,18 +275,36 @@ func (r *ScheduledTripRepository) GetByPermitAndDateRange(permitID string, start
 	return r.scanTrips(rows)
 }
 
-// GetBookableTrips retrieves bookable trips within a date range
-func (r *ScheduledTripRepository) GetBookableTrips(startDate, endDate time.Time) ([]models.ScheduledTrip, error) {
+// GetBookableTrips retrieves bookable trips within a date range with route, bus, and seat details
+func (r *ScheduledTripRepository) GetBookableTrips(startDate, endDate time.Time) ([]models.ScheduledTripWithRouteInfo, error) {
 	query := `
-		SELECT id, trip_schedule_id, bus_owner_route_id, permit_id, departure_datetime,
-			   estimated_duration_minutes, assigned_driver_id, assigned_conductor_id,
-			   seat_layout_id, is_bookable, ever_published, base_fare, status, cancellation_reason, cancelled_at,
-			   assignment_deadline, created_at, updated_at
-		FROM scheduled_trips
-		WHERE is_bookable = true
-		  AND DATE(departure_datetime) BETWEEN $1 AND $2
-		  AND status IN ('scheduled', 'confirmed')
-		ORDER BY departure_datetime
+		SELECT 
+			st.id, st.trip_schedule_id, st.permit_id, st.departure_datetime,
+			st.estimated_duration_minutes, st.assigned_driver_id, st.assigned_conductor_id,
+			st.seat_layout_id, st.is_bookable, st.ever_published, st.base_fare, st.status, st.cancellation_reason, st.cancelled_at,
+			st.assignment_deadline, st.created_at, st.updated_at,
+			mr.route_number, mr.origin_city, mr.destination_city,
+			bor.direction,
+			COALESCE(NULLIF(b.bus_number, ''), NULLIF(b.license_plate, ''), NULLIF(rp.bus_registration_number, ''), '') as bus_number,
+			COALESCE(NULLIF(rp.bus_registration_number, ''), NULLIF(b.license_plate, ''), NULLIF(b.bus_number, ''), '') as bus_registration_number,
+			COALESCE(
+				NULLIF((SELECT COUNT(*) FROM trip_seats ts_seats WHERE ts_seats.scheduled_trip_id = st.id AND ts_seats.status = 'available'), 0),
+				NULLIF(bslt.total_seats, 0),
+				NULLIF(rp.approved_seating_capacity, 0),
+				32
+			) as available_seats,
+			COALESCE(bslt.total_seats, rp.approved_seating_capacity, 32) as total_seats
+		FROM scheduled_trips st
+		LEFT JOIN trip_schedules ts ON st.trip_schedule_id = ts.id
+		LEFT JOIN bus_owner_routes bor ON COALESCE(st.bus_owner_route_id, ts.bus_owner_route_id) = bor.id
+		LEFT JOIN master_routes mr ON bor.master_route_id = mr.id
+		LEFT JOIN route_permits rp ON COALESCE(st.permit_id, ts.permit_id) = rp.id
+		LEFT JOIN buses b ON (rp.bus_registration_number = b.license_plate OR b.permit_id = rp.id)
+		LEFT JOIN bus_seat_layout_templates bslt ON (st.seat_layout_id = bslt.id OR b.seat_layout_id = bslt.id)
+		WHERE st.is_bookable = true
+		  AND DATE(st.departure_datetime) BETWEEN $1 AND $2
+		  AND st.status IN ('scheduled', 'confirmed', 'in_progress')
+		ORDER BY st.departure_datetime
 	`
 
 	rows, err := r.db.Query(query, startDate, endDate)
@@ -295,7 +313,136 @@ func (r *ScheduledTripRepository) GetBookableTrips(startDate, endDate time.Time)
 	}
 	defer rows.Close()
 
-	return r.scanTrips(rows)
+	return r.scanBookableTripsWithRouteInfo(rows)
+}
+
+func (r *ScheduledTripRepository) scanBookableTripsWithRouteInfo(rows *sql.Rows) ([]models.ScheduledTripWithRouteInfo, error) {
+	trips := []models.ScheduledTripWithRouteInfo{}
+
+	for rows.Next() {
+		var tripWithRoute models.ScheduledTripWithRouteInfo
+		var tripScheduleID sql.NullString
+		var permitID sql.NullString
+		var estimatedDurationMinutes sql.NullInt64
+		var assignedDriverID sql.NullString
+		var assignedConductorID sql.NullString
+		var seatLayoutID sql.NullString
+		var assignmentDeadline sql.NullTime
+		var cancellationReason sql.NullString
+		var cancelledAt sql.NullTime
+		var routeNumber sql.NullString
+		var originCity sql.NullString
+		var destinationCity sql.NullString
+		var direction sql.NullString
+		var busNumber sql.NullString
+		var busRegistrationNumber sql.NullString
+		var availableSeats sql.NullInt64
+		var totalSeats sql.NullInt64
+
+		err := rows.Scan(
+			&tripWithRoute.ID,
+			&tripScheduleID,
+			&permitID,
+			&tripWithRoute.DepartureDatetime,
+			&estimatedDurationMinutes,
+			&assignedDriverID,
+			&assignedConductorID,
+			&seatLayoutID,
+			&tripWithRoute.IsBookable,
+			&tripWithRoute.EverPublished,
+			&tripWithRoute.BaseFare,
+			&tripWithRoute.Status,
+			&cancellationReason,
+			&cancelledAt,
+			&assignmentDeadline,
+			&tripWithRoute.CreatedAt,
+			&tripWithRoute.UpdatedAt,
+			&routeNumber,
+			&originCity,
+			&destinationCity,
+			&direction,
+			&busNumber,
+			&busRegistrationNumber,
+			&availableSeats,
+			&totalSeats,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if tripScheduleID.Valid {
+			tripWithRoute.TripScheduleID = &tripScheduleID.String
+		}
+		if permitID.Valid {
+			tripWithRoute.PermitID = &permitID.String
+		}
+		if estimatedDurationMinutes.Valid {
+			duration := int(estimatedDurationMinutes.Int64)
+			tripWithRoute.EstimatedDurationMinutes = &duration
+		}
+		if assignedDriverID.Valid {
+			tripWithRoute.AssignedDriverID = &assignedDriverID.String
+		}
+		if assignedConductorID.Valid {
+			tripWithRoute.AssignedConductorID = &assignedConductorID.String
+		}
+		if seatLayoutID.Valid {
+			tripWithRoute.SeatLayoutID = &seatLayoutID.String
+		}
+		if assignmentDeadline.Valid {
+			tripWithRoute.AssignmentDeadline = &assignmentDeadline.Time
+		}
+		if cancellationReason.Valid {
+			tripWithRoute.CancellationReason = &cancellationReason.String
+		}
+		if cancelledAt.Valid {
+			tripWithRoute.CancelledAt = &cancelledAt.Time
+		}
+
+		if routeNumber.Valid {
+			tripWithRoute.RouteNumber = &routeNumber.String
+		}
+		if busNumber.Valid && busNumber.String != "" {
+			tripWithRoute.BusNumber = &busNumber.String
+		}
+		if busRegistrationNumber.Valid && busRegistrationNumber.String != "" {
+			tripWithRoute.BusRegistrationNumber = &busRegistrationNumber.String
+		}
+		if availableSeats.Valid {
+			seats := int(availableSeats.Int64)
+			tripWithRoute.AvailableSeats = &seats
+		}
+		if totalSeats.Valid {
+			tripWithRoute.TotalSeats = int(totalSeats.Int64)
+		}
+
+		if direction.Valid {
+			isUp := direction.String == "UP"
+			tripWithRoute.IsUpDirection = &isUp
+			if !isUp && originCity.Valid && destinationCity.Valid {
+				tripWithRoute.OriginCity = &destinationCity.String
+				tripWithRoute.DestinationCity = &originCity.String
+			} else {
+				if originCity.Valid {
+					tripWithRoute.OriginCity = &originCity.String
+				}
+				if destinationCity.Valid {
+					tripWithRoute.DestinationCity = &destinationCity.String
+				}
+			}
+		} else {
+			if originCity.Valid {
+				tripWithRoute.OriginCity = &originCity.String
+			}
+			if destinationCity.Valid {
+				tripWithRoute.DestinationCity = &destinationCity.String
+			}
+		}
+
+		trips = append(trips, tripWithRoute)
+	}
+
+	return trips, rows.Err()
 }
 
 // Update updates a scheduled trip

@@ -180,14 +180,19 @@ func (r *SearchRepository) FindDirectTrips(
 			st.id as trip_id,
 			COALESCE(bor.custom_route_name, mr.route_name) as route_name,
 			mr.route_number,
+			COALESCE(NULLIF(b.bus_number, ''), NULLIF(b.license_plate, ''), NULLIF(rp.bus_registration_number, ''), 'ND-' || SUBSTRING(st.id::text, 1, 4)) as bus_number,
 			b.bus_type,
 			st.departure_datetime as departure_time,
 			-- Calculate arrival time: departure + duration
 			st.departure_datetime +
 				(COALESCE(st.estimated_duration_minutes, 0) * interval '1 minute') as estimated_arrival,
 			COALESCE(st.estimated_duration_minutes, 0) as duration_minutes,
-			-- Available seats removed - will be calculated from separate booking table
-			COALESCE(bslt.total_seats, 0) as total_seats,
+			COALESCE(bslt.total_seats, 45) as total_seats,
+			COALESCE(
+				NULLIF((SELECT COUNT(*) FROM trip_seats ts WHERE ts.scheduled_trip_id = st.id AND ts.status = 'available'), 0),
+				NULLIF(bslt.total_seats, 0),
+				45
+			) as available_seats,
 			COALESCE(rp.approved_fare, st.base_fare, 0) as fare,
 			from_stop.stop_name as boarding_point,
 			to_stop.stop_name as dropping_point,
@@ -202,13 +207,14 @@ func (r *SearchRepository) FindDirectTrips(
 			COALESCE(bor.master_route_id, check_from.master_route_id)::text as master_route_id
 		FROM scheduled_trips st
 		-- Join bus owner route
-		LEFT JOIN bus_owner_routes bor ON st.bus_owner_route_id = bor.id
+		LEFT JOIN trip_schedules ts ON st.trip_schedule_id = ts.id
+		LEFT JOIN bus_owner_routes bor ON COALESCE(st.bus_owner_route_id, ts.bus_owner_route_id) = bor.id
 		LEFT JOIN master_routes mr ON bor.master_route_id = mr.id
 		-- Join permit for fare and bus
-		LEFT JOIN route_permits rp ON st.permit_id = rp.id
-		LEFT JOIN buses b ON rp.bus_registration_number = b.license_plate
+		LEFT JOIN route_permits rp ON COALESCE(st.permit_id, ts.permit_id) = rp.id
+		LEFT JOIN buses b ON (rp.bus_registration_number = b.license_plate OR b.permit_id = rp.id)
 		-- Join seat layout template to get total_seats
-		LEFT JOIN bus_seat_layout_templates bslt ON b.seat_layout_id = bslt.id
+		LEFT JOIN bus_seat_layout_templates bslt ON (st.seat_layout_id = bslt.id OR b.seat_layout_id = bslt.id)
 		-- Get stop information
 		JOIN master_route_stops from_stop ON from_stop.id = $1
 		JOIN master_route_stops to_stop ON to_stop.id = $2
@@ -244,11 +250,13 @@ func (r *SearchRepository) FindDirectTrips(
 		TripID           uuid.UUID `db:"trip_id"`
 		RouteName        string    `db:"route_name"`
 		RouteNumber      *string   `db:"route_number"`
+		BusNumber        string    `db:"bus_number"`
 		BusType          *string   `db:"bus_type"` // Nullable - bus might not have type set
 		DepartureTime    time.Time `db:"departure_time"`
 		EstimatedArrival time.Time `db:"estimated_arrival"`
 		DurationMinutes  int       `db:"duration_minutes"`
 		TotalSeats       int       `db:"total_seats"`
+		AvailableSeats   int       `db:"available_seats"`
 		Fare             float64   `db:"fare"`
 		BoardingPoint    string    `db:"boarding_point"`
 		DroppingPoint    string    `db:"dropping_point"`
@@ -294,11 +302,13 @@ func (r *SearchRepository) FindDirectTrips(
 			TripID:           temp.TripID,
 			RouteName:        temp.RouteName,
 			RouteNumber:      temp.RouteNumber,
+			BusNumber:        temp.BusNumber,
 			BusType:          busType,
 			DepartureTime:    temp.DepartureTime,
 			EstimatedArrival: temp.EstimatedArrival,
 			DurationMinutes:  temp.DurationMinutes,
 			TotalSeats:       temp.TotalSeats,
+			AvailableSeats:   temp.AvailableSeats,
 			Fare:             temp.Fare,
 			BoardingPoint:    temp.BoardingPoint,
 			DroppingPoint:    temp.DroppingPoint,

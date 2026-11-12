@@ -55,17 +55,18 @@ type TripResult struct {
 	TripID           uuid.UUID `json:"trip_id" db:"trip_id"`
 	RouteName        string    `json:"route_name" db:"route_name"`
 	RouteNumber      *string   `json:"route_number,omitempty" db:"route_number"`
+	BusNumber        string    `json:"bus_number" db:"bus_number"`
 	BusType          string    `json:"bus_type" db:"bus_type"`
 	DepartureTime    time.Time `json:"-" db:"departure_time"`
 	EstimatedArrival time.Time `json:"-" db:"estimated_arrival"`
 	DurationMinutes  int       `json:"duration_minutes" db:"duration_minutes"`
-	// AvailableSeats removed - will be calculated from booking table in separate query
-	TotalSeats    int         `json:"total_seats" db:"total_seats"`
-	Fare          float64     `json:"fare" db:"fare"`
-	BoardingPoint string      `json:"boarding_point" db:"boarding_point"`
-	DroppingPoint string      `json:"dropping_point" db:"dropping_point"`
-	BusFeatures   BusFeatures `json:"bus_features"`
-	IsBookable    bool        `json:"is_bookable" db:"is_bookable"`
+	TotalSeats       int       `json:"total_seats" db:"total_seats"`
+	AvailableSeats   int       `json:"available_seats" db:"available_seats"`
+	Fare             float64   `json:"fare" db:"fare"`
+	BoardingPoint    string    `json:"boarding_point" db:"boarding_point"`
+	DroppingPoint    string    `json:"dropping_point" db:"dropping_point"`
+	BusFeatures      BusFeatures `json:"bus_features"`
+	IsBookable       bool      `json:"is_bookable" db:"is_bookable"`
 	// Route stops for passenger to select boarding/alighting points
 	RouteStops []RouteStop `json:"route_stops,omitempty"`
 	// Route IDs for lounge lookup
