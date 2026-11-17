@@ -465,10 +465,20 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 			l.lounge_name, l.address,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
-				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
-				   OR (b_master.id IS NOT NULL AND tb.booking_id = b_master.id)
-				   OR tb.booking_id = lb.id
+				WHERE (
+					tb.booking_id = lb.id
+					OR (
+						(
+							(tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+							OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+							OR (b_master.id IS NOT NULL AND tb.booking_id = b_master.id)
+						)
+						AND (
+							(lb.booking_type IN ('pre_trip', 'post_trip') AND tb.lounge_transport_type = lb.booking_type::text)
+							OR (lb.booking_type NOT IN ('pre_trip', 'post_trip') AND (tb.lounge_transport_type IS NULL OR tb.lounge_transport_type = '' OR tb.lounge_transport_type = 'standalone'))
+						)
+					)
+				)
 			) AS has_transport,
 			COALESCE(tb.vehicle_type, '') AS vehicle_type,
 			COALESCE(ltl.location, '') AS pickup_location_name,
@@ -480,7 +490,8 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 			) AS driver_assignment_status,
 			COALESCE(b_master.booking_reference, '') AS master_booking_reference,
 			COALESCE(tb.transport_price::text, '') AS transport_price,
-			COALESCE(tb.payment_status, '') AS transport_payment_status
+			COALESCE(tb.payment_status, '') AS transport_payment_status,
+			COALESCE(tb.lounge_transport_type, '') AS lounge_transport_type
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		LEFT JOIN bookings b_master ON (
@@ -490,12 +501,22 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 			))
 		)
 		LEFT JOIN LATERAL (
-			SELECT tb_inner.vehicle_type, tb_inner.pickup_location_id, tb_inner.transport_price, tb_inner.payment_status
+			SELECT tb_inner.vehicle_type, tb_inner.pickup_location_id, tb_inner.transport_price, tb_inner.payment_status, tb_inner.lounge_transport_type
 			FROM transport_bookings tb_inner
-			WHERE (tb_inner.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
-			   OR (tb_inner.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
-			   OR (b_master.id IS NOT NULL AND tb_inner.booking_id = b_master.id)
-			   OR tb_inner.booking_id = lb.id
+			WHERE (
+				tb_inner.booking_id = lb.id
+				OR (
+					(
+						(tb_inner.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+						OR (tb_inner.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+						OR (b_master.id IS NOT NULL AND tb_inner.booking_id = b_master.id)
+					)
+					AND (
+						(lb.booking_type IN ('pre_trip', 'post_trip') AND tb_inner.lounge_transport_type = lb.booking_type::text)
+						OR (lb.booking_type NOT IN ('pre_trip', 'post_trip') AND (tb_inner.lounge_transport_type IS NULL OR tb_inner.lounge_transport_type = '' OR tb_inner.lounge_transport_type = 'standalone'))
+					)
+				)
+			)
 			ORDER BY tb_inner.created_at DESC
 			LIMIT 1
 		) tb ON TRUE
@@ -521,6 +542,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 		&booking.MasterBookingReference,
 		&booking.TransportPrice,
 		&booking.TransportPaymentStatus,
+		&booking.LoungeTransportType,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -719,9 +741,15 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserID(userID uuid.UUID, li
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
-				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
-				   OR tb.booking_id = lb.id
+				WHERE tb.booking_id = lb.id
+				   OR (
+				       ((tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				        OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL))
+				       AND (
+				           (lb.booking_type IN ('pre_trip', 'post_trip') AND tb.lounge_transport_type = lb.booking_type::text)
+				           OR (lb.booking_type NOT IN ('pre_trip', 'post_trip') AND (tb.lounge_transport_type IS NULL OR tb.lounge_transport_type = '' OR tb.lounge_transport_type = 'standalone'))
+				       )
+				   )
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -749,9 +777,15 @@ func (r *LoungeBookingRepository) GetUpcomingLoungeBookingsByUserID(userID uuid.
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
-				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
-				   OR tb.booking_id = lb.id
+				WHERE tb.booking_id = lb.id
+				   OR (
+				       ((tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				        OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL))
+				       AND (
+				           (lb.booking_type IN ('pre_trip', 'post_trip') AND tb.lounge_transport_type = lb.booking_type::text)
+				           OR (lb.booking_type NOT IN ('pre_trip', 'post_trip') AND (tb.lounge_transport_type IS NULL OR tb.lounge_transport_type = '' OR tb.lounge_transport_type = 'standalone'))
+				       )
+				   )
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -780,9 +814,15 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByUserIDAndStatus(userID uuid
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
-				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
-				   OR tb.booking_id = lb.id
+				WHERE tb.booking_id = lb.id
+				   OR (
+				       ((tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				        OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL))
+				       AND (
+				           (lb.booking_type IN ('pre_trip', 'post_trip') AND tb.lounge_transport_type = lb.booking_type::text)
+				           OR (lb.booking_type NOT IN ('pre_trip', 'post_trip') AND (tb.lounge_transport_type IS NULL OR tb.lounge_transport_type = '' OR tb.lounge_transport_type = 'standalone'))
+				       )
+				   )
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -811,9 +851,15 @@ func (r *LoungeBookingRepository) GetLoungeBookingsByLoungeID(loungeID uuid.UUID
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
-				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
-				   OR tb.booking_id = lb.id
+				WHERE tb.booking_id = lb.id
+				   OR (
+				       ((tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				        OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL))
+				       AND (
+				           (lb.booking_type IN ('pre_trip', 'post_trip') AND tb.lounge_transport_type = lb.booking_type::text)
+				           OR (lb.booking_type NOT IN ('pre_trip', 'post_trip') AND (tb.lounge_transport_type IS NULL OR tb.lounge_transport_type = '' OR tb.lounge_transport_type = 'standalone'))
+				       )
+				   )
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 
@@ -883,9 +929,15 @@ func (r *LoungeBookingRepository) GetTodaysLoungeBookings(loungeID uuid.UUID) ([
 			lb.total_amount, lb.status, lb.payment_status, lb.created_at, lb.master_booking_id,
 			EXISTS(
 				SELECT 1 FROM transport_bookings tb 
-				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
-				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
-				   OR tb.booking_id = lb.id
+				WHERE tb.booking_id = lb.id
+				   OR (
+				       ((tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
+				        OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL))
+				       AND (
+				           (lb.booking_type IN ('pre_trip', 'post_trip') AND tb.lounge_transport_type = lb.booking_type::text)
+				           OR (lb.booking_type NOT IN ('pre_trip', 'post_trip') AND (tb.lounge_transport_type IS NULL OR tb.lounge_transport_type = '' OR tb.lounge_transport_type = 'standalone'))
+				       )
+				   )
 			) AS has_transport,
 			COALESCE(
 				(SELECT status FROM lounge_booking_driver_assignments lbda 

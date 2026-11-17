@@ -291,6 +291,7 @@ type LoungeBooking struct {
 	MasterBookingReference string     `db:"master_booking_reference" json:"master_booking_reference,omitempty"`
 	TransportPrice         string     `db:"transport_price" json:"transport_price,omitempty"`
 	TransportPaymentStatus string     `db:"transport_payment_status" json:"transport_payment_status,omitempty"`
+	LoungeTransportType    string     `db:"lounge_transport_type" json:"lounge_transport_type,omitempty"`
 }
 
 // MarshalJSON customizes JSON encoding for LoungeBooking
