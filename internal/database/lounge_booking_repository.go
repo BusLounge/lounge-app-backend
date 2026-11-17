@@ -467,6 +467,7 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 				SELECT 1 FROM transport_bookings tb 
 				WHERE (tb.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
 				   OR (tb.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+				   OR (b_master.id IS NOT NULL AND tb.booking_id = b_master.id)
 				   OR tb.booking_id = lb.id
 			) AS has_transport,
 			COALESCE(tb.vehicle_type, '') AS vehicle_type,
@@ -477,7 +478,9 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 				 ORDER BY lbda.created_at DESC LIMIT 1),
 				''
 			) AS driver_assignment_status,
-			COALESCE(b_master.booking_reference, '') AS master_booking_reference
+			COALESCE(b_master.booking_reference, '') AS master_booking_reference,
+			COALESCE(tb.transport_price::text, '') AS transport_price,
+			COALESCE(tb.payment_status, '') AS transport_payment_status
 		FROM lounge_bookings lb
 		JOIN lounges l ON lb.lounge_id = l.id
 		LEFT JOIN bookings b_master ON (
@@ -487,10 +490,11 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 			))
 		)
 		LEFT JOIN LATERAL (
-			SELECT tb_inner.vehicle_type, tb_inner.pickup_location_id
+			SELECT tb_inner.vehicle_type, tb_inner.pickup_location_id, tb_inner.transport_price, tb_inner.payment_status
 			FROM transport_bookings tb_inner
 			WHERE (tb_inner.booking_id = lb.master_booking_id AND lb.master_booking_id IS NOT NULL)
 			   OR (tb_inner.booking_id = lb.bus_booking_id AND lb.bus_booking_id IS NOT NULL)
+			   OR (b_master.id IS NOT NULL AND tb_inner.booking_id = b_master.id)
 			   OR tb_inner.booking_id = lb.id
 			ORDER BY tb_inner.created_at DESC
 			LIMIT 1
@@ -515,6 +519,8 @@ func (r *LoungeBookingRepository) GetLoungeBookingByID(bookingID uuid.UUID) (*mo
 		&booking.PickupLocationName,
 		&booking.DriverAssignmentStatus,
 		&booking.MasterBookingReference,
+		&booking.TransportPrice,
+		&booking.TransportPaymentStatus,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -1106,10 +1112,13 @@ func (r *LoungeBookingRepository) GetOrdersByBookingIDFiltered(bookingID uuid.UU
 	for i := range orders {
 		var items []models.LoungeOrderItem
 		itemQuery := `
-			SELECT id, order_id, product_id, product_name, quantity, unit_price, total_price, created_at
-			FROM lounge_order_items
-			WHERE order_id = $1
-			ORDER BY created_at ASC
+			SELECT loi.id, loi.order_id, loi.product_id, loi.product_name,
+			       COALESCE(lp.product_type, 'product') AS product_type,
+			       loi.quantity, loi.unit_price, loi.total_price, loi.created_at
+			FROM lounge_order_items loi
+			LEFT JOIN lounge_products lp ON lp.id = loi.product_id
+			WHERE loi.order_id = $1
+			ORDER BY loi.created_at ASC
 		`
 		err = r.db.Select(&items, itemQuery, orders[i].ID)
 		if err != nil {

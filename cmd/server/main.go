@@ -299,7 +299,7 @@ func main() {
 
 	loungeStaffHandler := handlers.NewLoungeStaffHandler(loungeStaffRepository, loungeRepository, loungeOwnerRepository, userRepository, phoneValidator, loungeStaffRepository, bookingRepository, loungeBookingRepo)
 	loungeDriverHandler := handlers.NewLoungeDriverHandler(loungeOwnerRepository, loungeRepository, loungeDriverRepository)
-	loungeTransportLocationHandler := handlers.NewLoungeTransportLocationHandler(loungeOwnerRepository, loungeRepository, loungeTransportLocationRepository)
+	loungeTransportLocationHandler := handlers.NewLoungeTransportLocationHandler(loungeOwnerRepository, loungeRepository, loungeTransportLocationRepository, loungeTransportLocationPriceRepository)
 	loungeTransportLocationPriceHandler := handlers.NewLoungeTransportLocationPriceHandler(loungeOwnerRepository, loungeRepository, loungeTransportLocationRepository, loungeTransportLocationPriceRepository)
 
 	// Initialize lounge booking handler

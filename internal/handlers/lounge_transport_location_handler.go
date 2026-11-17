@@ -13,23 +13,24 @@ import (
 
 // LoungeTransportLocationHandler handles HTTP requests related to lounge transport locations
 type LoungeTransportLocationHandler struct {
-	loungeOwnerRepo             *database.LoungeOwnerRepository
-	loungeRepo                  *database.LoungeRepository
-	loungeTransportLocationRepo *database.LoungeTransportLocationRepository
+	loungeOwnerRepo                  *database.LoungeOwnerRepository
+	loungeRepo                       *database.LoungeRepository
+	loungeTransportLocationRepo      *database.LoungeTransportLocationRepository
+	loungeTransportLocationPriceRepo *database.LoungeTransportLocationPriceRepository
 }
 
 // NewLoungeTransportLocationHandler creates new lounge transport location handler
 func NewLoungeTransportLocationHandler(
-
 	loungeOwnerRepo *database.LoungeOwnerRepository,
 	loungeRepo *database.LoungeRepository,
 	loungeTransportLocationRepo *database.LoungeTransportLocationRepository,
-
+	loungeTransportLocationPriceRepo *database.LoungeTransportLocationPriceRepository,
 ) *LoungeTransportLocationHandler {
 	return &LoungeTransportLocationHandler{
-		loungeOwnerRepo:             loungeOwnerRepo,
-		loungeRepo:                  loungeRepo,
-		loungeTransportLocationRepo: loungeTransportLocationRepo,
+		loungeOwnerRepo:                  loungeOwnerRepo,
+		loungeRepo:                       loungeRepo,
+		loungeTransportLocationRepo:      loungeTransportLocationRepo,
+		loungeTransportLocationPriceRepo: loungeTransportLocationPriceRepo,
 	}
 }
 
@@ -47,12 +48,15 @@ type AddLoungeTransportLocationRequest struct {
 }
 
 type UpdateLoungeTransportLocationRequest struct {
-	Location    *string                               `json:"location" binding:"omitempty,min=2,max=200"`
-	Latitude    *float64                              `json:"latitude" binding:"omitempty,gte=-90,lte=90"`
-	Longitude   *float64                              `json:"longitude" binding:"omitempty,gte=-180,lte=180"`
-	EstDuration *int                                  `json:"est_duration" binding:"omitempty,gte=0"`
-	Distance    *float64                              `json:"distance" binding:"omitempty,gte=0"`
-	Status      *models.LoungeTransportLocationStatus `json:"status" binding:"omitempty,oneof=active inactive"`
+	Location          *string                               `json:"location" binding:"omitempty,min=2,max=200"`
+	Latitude          *float64                              `json:"latitude" binding:"omitempty,gte=-90,lte=90"`
+	Longitude         *float64                              `json:"longitude" binding:"omitempty,gte=-180,lte=180"`
+	EstDuration       *int                                  `json:"est_duration" binding:"omitempty,gte=0"`
+	Distance          *float64                              `json:"distance" binding:"omitempty,gte=0"`
+	Status            *models.LoungeTransportLocationStatus `json:"status" binding:"omitempty,oneof=active inactive"`
+	ThreeWheelerPrice *float64                              `json:"three_wheeler_price" binding:"omitempty,gte=0"`
+	CarPrice          *float64                              `json:"car_price" binding:"omitempty,gte=0"`
+	VanPrice          *float64                              `json:"van_price" binding:"omitempty,gte=0"`
 }
 
 // Add transport locations to lounge
@@ -199,8 +203,7 @@ func (h *LoungeTransportLocationHandler) GetLoungeTransportLocationsByLoungeID(c
 
 	// looping and feeding the data
 	for _, s := range locations {
-		response = append(response, gin.H{
-
+		item := gin.H{
 			"id":           s.ID,
 			"lounge_id":    s.LoungeID,
 			"location":     s.Location,
@@ -211,7 +214,23 @@ func (h *LoungeTransportLocationHandler) GetLoungeTransportLocationsByLoungeID(c
 			"status":       s.Status,
 			"created_at":   s.CreatedAt,
 			"updated_at":   s.UpdatedAt,
-		})
+		}
+
+		if h.loungeTransportLocationPriceRepo != nil {
+			priceData, _ := h.loungeTransportLocationPriceRepo.GetLoungeTransportLocationPrices(loungeID, s.ID)
+			if priceData != nil {
+				item["prices"] = map[string]float64{
+					"Three Wheeler":       priceData.ThreeWheelerPrice,
+					"Car":                 priceData.CarPrice,
+					"Van":                 priceData.VanPrice,
+					"three_wheeler_price": priceData.ThreeWheelerPrice,
+					"car_price":           priceData.CarPrice,
+					"van_price":           priceData.VanPrice,
+				}
+			}
+		}
+
+		response = append(response, item)
 	}
 
 	// sending back the dataset with the length
@@ -438,17 +457,76 @@ func (h *LoungeTransportLocationHandler) UpdateLoungeTransportLocationByID(c *gi
 	}
 
 	// update the location
-	if err := h.loungeTransportLocationRepo.UpdateLoungeTransportLocationByID(locationID, updates); err != nil {
-		// if error occured returning the server error
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "update_failed",
-			Message: "Failed to update location",
-		})
-		return
+	if len(updates) > 0 {
+		if err := h.loungeTransportLocationRepo.UpdateLoungeTransportLocationByID(locationID, updates); err != nil {
+			// if error occured returning the server error
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "update_failed",
+				Message: "Failed to update location",
+			})
+			return
+		}
+	}
+
+	if h.loungeTransportLocationPriceRepo != nil && (req.ThreeWheelerPrice != nil || req.CarPrice != nil || req.VanPrice != nil) {
+		currentPrices, _ := h.loungeTransportLocationPriceRepo.GetLoungeTransportLocationPrices(loungeID, locationID)
+		tw := 0.0
+		car := 0.0
+		van := 0.0
+		if currentPrices != nil {
+			tw = currentPrices.ThreeWheelerPrice
+			car = currentPrices.CarPrice
+			van = currentPrices.VanPrice
+		}
+		if req.ThreeWheelerPrice != nil {
+			tw = *req.ThreeWheelerPrice
+		}
+		if req.CarPrice != nil {
+			car = *req.CarPrice
+		}
+		if req.VanPrice != nil {
+			van = *req.VanPrice
+		}
+		_, err := h.loungeTransportLocationPriceRepo.SetLoungeTransportLocationPrices(loungeID, locationID, tw, car, van)
+		if err != nil {
+			log.Printf("ERROR: Failed to update prices for location %s: %v", locationID, err)
+		}
 	}
 
 	// if ok returning the update location
 	updatedLocation, _ := h.loungeTransportLocationRepo.GetLoungeTransportLocationByID(locationID)
-	c.JSON(http.StatusOK, updatedLocation)
+	if updatedLocation == nil {
+		c.JSON(http.StatusOK, gin.H{"message": "Location updated successfully"})
+		return
+	}
+
+	res := gin.H{
+		"id":           updatedLocation.ID,
+		"lounge_id":    updatedLocation.LoungeID,
+		"location":     updatedLocation.Location,
+		"latitude":     updatedLocation.Latitude,
+		"longitude":    updatedLocation.Longitude,
+		"est_duration": updatedLocation.EstDuration,
+		"distance":     updatedLocation.Distance,
+		"status":       updatedLocation.Status,
+		"created_at":   updatedLocation.CreatedAt,
+		"updated_at":   updatedLocation.UpdatedAt,
+	}
+
+	if h.loungeTransportLocationPriceRepo != nil {
+		priceData, _ := h.loungeTransportLocationPriceRepo.GetLoungeTransportLocationPrices(loungeID, locationID)
+		if priceData != nil {
+			res["prices"] = map[string]float64{
+				"Three Wheeler":       priceData.ThreeWheelerPrice,
+				"Car":                 priceData.CarPrice,
+				"Van":                 priceData.VanPrice,
+				"three_wheeler_price": priceData.ThreeWheelerPrice,
+				"car_price":           priceData.CarPrice,
+				"van_price":           priceData.VanPrice,
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, res)
 
 }

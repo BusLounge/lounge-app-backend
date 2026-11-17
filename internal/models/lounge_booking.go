@@ -289,6 +289,8 @@ type LoungeBooking struct {
 	PickupLocationName string         `db:"pickup_location_name" json:"pickup_location_name,omitempty"`
 	DriverAssignmentStatus string     `db:"driver_assignment_status" json:"driver_assignment_status,omitempty"`
 	MasterBookingReference string     `db:"master_booking_reference" json:"master_booking_reference,omitempty"`
+	TransportPrice         string     `db:"transport_price" json:"transport_price,omitempty"`
+	TransportPaymentStatus string     `db:"transport_payment_status" json:"transport_payment_status,omitempty"`
 }
 
 // MarshalJSON customizes JSON encoding for LoungeBooking
@@ -434,6 +436,7 @@ type LoungeOrderItem struct {
 	OrderID     uuid.UUID `db:"order_id" json:"order_id"`
 	ProductID   uuid.UUID `db:"product_id" json:"product_id"`
 	ProductName string    `db:"product_name" json:"product_name"` // Snapshot
+	ProductType string    `db:"product_type" json:"product_type,omitempty"`
 	Quantity    int       `db:"quantity" json:"quantity"`
 	UnitPrice   string    `db:"unit_price" json:"unit_price"`   // DECIMAL - snapshot
 	TotalPrice  string    `db:"total_price" json:"total_price"` // DECIMAL
