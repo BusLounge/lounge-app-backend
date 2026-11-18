@@ -918,6 +918,8 @@ func main() {
 			// Lounge Inventory (New Endpoints)
 			logger.Info("  ✅ GET /api/v1/lounges/:id/inventory/catalog (read-only, owner/staff)")
 			loungesProtectedProducts.GET("/:id/inventory/catalog", inventoryHandler.GetAvailableCatalog)
+			logger.Info("  ✅ GET /api/v1/lounges/:id/products/:product_id/discount (read-only)")
+			loungesProtectedProducts.GET("/:id/products/:product_id/discount", inventoryHandler.GetProductDiscount)
 			logger.Info("  ✅ POST /api/v1/lounges/:id/inventory (requires approval)")
 			loungesProtectedProducts.POST("/:id/inventory", middleware.RequireApprovedLoungeOwner(loungeOwnerRepository), inventoryHandler.AddInventoryItem)
 			logger.Info("  ✅ DELETE /api/v1/lounges/:id/products/:product_id (requires approval)")

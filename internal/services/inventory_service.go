@@ -201,9 +201,10 @@ func (s *InventoryService) EnrollInventoryItem(req *EnrollInventoryItemRequest, 
 
 // UpdateProductRequest contains data for editing a lounge product
 type UpdateProductRequest struct {
-	SellingPrice float64 `json:"selling_price"`
-	ReorderLevel int     `json:"reorder_level"`
-	IsAvailable  bool    `json:"is_available"`
+	SellingPrice float64          `json:"selling_price"`
+	ReorderLevel int              `json:"reorder_level"`
+	IsAvailable  bool             `json:"is_available"`
+	Discount     *DiscountRequest `json:"discount,omitempty"`
 }
 
 // UpdateStockRequest contains data for a stock update
@@ -218,15 +219,76 @@ func (s *InventoryService) DeleteLoungeProduct(loungeID uuid.UUID, productID uui
 }
 
 // UpdateLoungeProduct updates a lounge product's editable fields
-func (s *InventoryService) UpdateLoungeProduct(req *UpdateProductRequest, loungeID uuid.UUID, productID uuid.UUID) error {
+func (s *InventoryService) UpdateLoungeProduct(req *UpdateProductRequest, loungeID uuid.UUID, productID uuid.UUID, userID uuid.UUID) error {
 	if req.SellingPrice <= 0 {
 		return errors.New("selling_price must be greater than 0")
 	}
 	if req.ReorderLevel < 0 {
 		return errors.New("reorder_level cannot be negative")
 	}
+
+	if req.Discount != nil {
+		if req.Discount.DiscountName == "" {
+			return errors.New("discount_name is required when discount is provided")
+		}
+		if req.Discount.DiscountType != string(models.DiscountTypePercentage) && req.Discount.DiscountType != string(models.DiscountTypeFixedAmount) {
+			return errors.New("discount_type must be PERCENTAGE or FIXED_AMOUNT")
+		}
+		if req.Discount.DiscountValue <= 0 {
+			return errors.New("discount_value must be greater than 0")
+		}
+		if req.Discount.DiscountType == string(models.DiscountTypePercentage) && req.Discount.DiscountValue > 100 {
+			return errors.New("percentage discount_value cannot exceed 100")
+		}
+		if req.Discount.EndAt.Before(req.Discount.StartAt) || req.Discount.EndAt.Equal(req.Discount.StartAt) {
+			return errors.New("end_at must be after start_at")
+		}
+	}
+
+	now := time.Now().UTC()
+	var discountedPrice *string
+	if req.Discount != nil && req.Discount.IsActive && req.Discount.StartAt.Before(now) && req.Discount.EndAt.After(now) {
+		var finalPrice float64
+		if req.Discount.DiscountType == string(models.DiscountTypePercentage) {
+			finalPrice = req.SellingPrice - (req.SellingPrice * req.Discount.DiscountValue / 100)
+		} else {
+			finalPrice = req.SellingPrice - req.Discount.DiscountValue
+		}
+		if finalPrice < 0 {
+			finalPrice = 0
+		}
+		formattedPrice := fmt.Sprintf("%.2f", finalPrice)
+		discountedPrice = &formattedPrice
+	}
+
 	priceStr := fmt.Sprintf("%.2f", req.SellingPrice)
-	return s.inventoryRepo.UpdateLoungeProductFields(loungeID, productID, priceStr, nil, req.ReorderLevel, req.IsAvailable)
+	if err := s.inventoryRepo.UpdateLoungeProductFields(loungeID, productID, priceStr, discountedPrice, req.ReorderLevel, req.IsAvailable); err != nil {
+		return err
+	}
+
+	if req.Discount != nil {
+		discount := &models.InventoryDiscount{
+			ID:              uuid.New(),
+			LoungeProductID: productID,
+			DiscountName:    req.Discount.DiscountName,
+			DiscountType:    models.DiscountType(req.Discount.DiscountType),
+			DiscountValue:   fmt.Sprintf("%.2f", req.Discount.DiscountValue),
+			StartAt:         req.Discount.StartAt,
+			EndAt:           req.Discount.EndAt,
+			IsActive:        req.Discount.IsActive,
+			CreatedByUserID: userID,
+			CreatedAt:       now,
+			UpdatedAt:       now,
+		}
+		if err := s.inventoryRepo.UpsertProductDiscount(discount); err != nil {
+			return fmt.Errorf("failed to save discount: %w", err)
+		}
+	} else {
+		// Deactivate any existing discount
+		_ = s.inventoryRepo.DeactivateProductDiscounts(productID)
+	}
+
+	return nil
 }
 
 // UpdateProductStock updates the stock quantity for a product and inserts an audit transaction
@@ -292,4 +354,9 @@ func (s *InventoryService) UpdateProductStock(req *UpdateStockRequest, loungeID 
 	}
 
 	return s.inventoryRepo.UpdateLoungeProductStock(transaction, req.NewQuantity, newStockStatus)
+}
+
+// GetProductDiscount retrieves the latest discount (active or inactive) for a product
+func (s *InventoryService) GetProductDiscount(productID uuid.UUID) (*models.InventoryDiscount, error) {
+	return s.inventoryRepo.GetDiscountByProductID(productID)
 }

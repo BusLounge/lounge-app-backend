@@ -207,6 +207,38 @@ func (r *LoungeBookingRepository) GetProductsByLoungeID(loungeID uuid.UUID) ([]m
 		products = append(products, p)
 	}
 
+	if len(products) > 0 {
+		productIDs := make([]uuid.UUID, len(products))
+		for i, p := range products {
+			productIDs[i] = p.ID
+		}
+		queryDiscounts, args, err := sqlx.In(`
+			SELECT id, lounge_product_id, discount_name, discount_type, discount_value,
+			       start_at, end_at, is_active, created_by_user_id, created_at, updated_at
+			FROM lounge_inventory_discounts
+			WHERE lounge_product_id IN (?)
+			ORDER BY created_at DESC
+		`, productIDs)
+		if err == nil {
+			queryDiscounts = r.db.Rebind(queryDiscounts)
+			var discounts []models.InventoryDiscount
+			if err := r.db.Select(&discounts, queryDiscounts, args...); err == nil {
+				discMap := make(map[uuid.UUID]*models.InventoryDiscount)
+				for i := range discounts {
+					d := discounts[i]
+					if _, exists := discMap[d.LoungeProductID]; !exists {
+						discMap[d.LoungeProductID] = &d
+					}
+				}
+				for i := range products {
+					if d, ok := discMap[products[i].ID]; ok {
+						products[i].Discount = d
+					}
+				}
+			}
+		}
+	}
+
 	return products, nil
 }
 

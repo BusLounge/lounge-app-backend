@@ -190,7 +190,8 @@ type LoungeProduct struct {
 	PriceRateType          string                   `db:"price_rate_type" json:"price_rate_type"`
 
 	// Populated via JOINs
-	CategoryName string `db:"-" json:"category_name,omitempty"`
+	CategoryName string             `db:"-" json:"category_name,omitempty"`
+	Discount     *InventoryDiscount `db:"-" json:"discount,omitempty"`
 }
 
 // ============================================================================

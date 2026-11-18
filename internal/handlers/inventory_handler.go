@@ -306,8 +306,8 @@ func (h *InventoryHandler) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	if err := h.inventoryService.UpdateLoungeProduct(&req, loungeID, productID); err != nil {
-		if strings.Contains(err.Error(), "must be") || strings.Contains(err.Error(), "cannot be") {
+	if err := h.inventoryService.UpdateLoungeProduct(&req, loungeID, productID, userCtx.UserID); err != nil {
+		if strings.Contains(err.Error(), "must be") || strings.Contains(err.Error(), "cannot be") || strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "after start_at") {
 			c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: err.Error()})
 			return
 		}
@@ -378,4 +378,25 @@ func (h *InventoryHandler) UpdateProductStock(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Stock updated successfully"})
+}
+
+// GetProductDiscount handles GET /api/v1/lounges/:id/products/:product_id/discount
+func (h *InventoryHandler) GetProductDiscount(c *gin.Context) {
+	productID, err := uuid.Parse(c.Param("product_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid_id", Message: "Invalid product ID"})
+		return
+	}
+
+	discount, err := h.inventoryService.GetProductDiscount(productID)
+	if err != nil {
+		log.Printf("ERROR: Failed to get product discount: %v", err)
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "database_error", Message: "Failed to get discount"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    discount,
+	})
 }

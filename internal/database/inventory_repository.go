@@ -303,3 +303,94 @@ func (r *InventoryRepository) GetLoungeProductByID(loungeID uuid.UUID, productID
 	}
 	return &product, nil
 }
+
+// UpsertProductDiscount creates or updates the discount for a lounge product
+func (r *InventoryRepository) UpsertProductDiscount(discount *models.InventoryDiscount) error {
+	var count int
+	err := r.db.Get(&count, "SELECT COUNT(*) FROM lounge_inventory_discounts WHERE lounge_product_id = $1", discount.LoungeProductID)
+	if err != nil {
+		return fmt.Errorf("failed to check existing discount: %w", err)
+	}
+
+	if count > 0 {
+		query := `
+			UPDATE lounge_inventory_discounts
+			SET discount_name = $1,
+			    discount_type = $2,
+			    discount_value = $3,
+			    start_at = $4,
+			    end_at = $5,
+			    is_active = $6,
+			    updated_at = NOW()
+			WHERE lounge_product_id = $7
+		`
+		_, err = r.db.Exec(query,
+			discount.DiscountName,
+			discount.DiscountType,
+			discount.DiscountValue,
+			discount.StartAt,
+			discount.EndAt,
+			discount.IsActive,
+			discount.LoungeProductID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update discount: %w", err)
+		}
+	} else {
+		query := `
+			INSERT INTO lounge_inventory_discounts (
+				id, lounge_product_id, discount_name, discount_type, discount_value,
+				start_at, end_at, is_active, created_by_user_id, created_at, updated_at
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()
+			)
+		`
+		_, err = r.db.Exec(query,
+			discount.ID,
+			discount.LoungeProductID,
+			discount.DiscountName,
+			discount.DiscountType,
+			discount.DiscountValue,
+			discount.StartAt,
+			discount.EndAt,
+			discount.IsActive,
+			discount.CreatedByUserID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert discount: %w", err)
+		}
+	}
+	return nil
+}
+
+// DeactivateProductDiscounts marks all discounts for a product as inactive
+func (r *InventoryRepository) DeactivateProductDiscounts(productID uuid.UUID) error {
+	query := `
+		UPDATE lounge_inventory_discounts
+		SET is_active = false, updated_at = NOW()
+		WHERE lounge_product_id = $1
+	`
+	_, err := r.db.Exec(query, productID)
+	return err
+}
+
+// GetDiscountByProductID retrieves the latest discount (active or inactive) for a lounge product
+func (r *InventoryRepository) GetDiscountByProductID(productID uuid.UUID) (*models.InventoryDiscount, error) {
+	query := `
+		SELECT id, lounge_product_id, discount_name, discount_type, discount_value,
+		       start_at, end_at, is_active, created_by_user_id, created_at, updated_at
+		FROM lounge_inventory_discounts
+		WHERE lounge_product_id = $1
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var discount models.InventoryDiscount
+	err := r.db.Get(&discount, query, productID)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &discount, nil
+}
