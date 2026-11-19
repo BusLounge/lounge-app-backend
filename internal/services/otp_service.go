@@ -4,8 +4,8 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"log"
 	"math/big"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,7 +93,8 @@ func (s *OTPService) GenerateOTPForApp(phone, ipAddress, userAgent, appName stri
 
 	if isLoungeOTPApp(appName) {
 		if err := s.RecordOTPMaster(phone, otp, appName); err != nil {
-			return "", err
+			// Log warning, but do NOT abort login because OTP is already stored in otp_verifications
+			log.Printf("⚠️ WARNING: Failed to record OTP in otp_master for %s: %v", phone, err)
 		}
 	}
 
@@ -106,17 +107,12 @@ func (s *OTPService) RecordOTPMaster(phone, otp, appName string) error {
 		return nil
 	}
 
-	otpValue, err := strconv.ParseInt(otp, 10, 64)
-	if err != nil {
-		return fmt.Errorf("failed to parse otp value: %w", err)
-	}
-
 	query := `
 		INSERT INTO otp_master (otp, phone, app_name)
 		VALUES ($1, $2, $3)
 	`
 
-	_, err = s.db.Exec(query, otpValue, phone, normalizeAppName(appName))
+	_, err := s.db.Exec(query, otp, phone, normalizeAppName(appName))
 	if err != nil {
 		return fmt.Errorf("failed to store lounge otp: %w", err)
 	}

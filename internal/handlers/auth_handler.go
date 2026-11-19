@@ -213,6 +213,7 @@ func (h *AuthHandler) SendOTP(c *gin.Context) {
 	// Generate OTP with IP and user agent tracking
 	otp, err := h.otpService.GenerateOTPForApp(phone, clientIP, userAgent, req.AppType)
 	if err != nil {
+		log.Printf("❌ ERROR: Failed to generate OTP for %s (app: %s): %v", phone, req.AppType, err)
 		// Log failed OTP request
 		h.auditService.LogOTPRequest(phone, clientIP, userAgent, false, "generation_failed")
 
@@ -395,7 +396,7 @@ func (h *AuthHandler) GetOTPMasterRecords(c *gin.Context) {
 	for _, record := range records {
 		responseRecords = append(responseRecords, gin.H{
 			"id":       record.ID,
-			"otp":      fmt.Sprintf("%06d", record.OTP),
+			"otp":      record.OTP,
 			"phone":    record.Phone,
 			"app_name": record.AppName,
 		})

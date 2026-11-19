@@ -108,7 +108,7 @@ type OTPVerification struct {
 // OTPMasterRecord represents a lounge OTP tracking record for admin review
 type OTPMasterRecord struct {
 	ID      uuid.UUID `json:"id" db:"id"`
-	OTP     int64     `json:"otp" db:"otp"`
+	OTP     string    `json:"otp" db:"otp"`
 	Phone   string    `json:"phone" db:"phone"`
 	AppName string    `json:"app_name" db:"app_name"`
 }
