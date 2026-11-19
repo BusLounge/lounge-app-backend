@@ -302,7 +302,8 @@ func (h *InventoryHandler) UpdateProduct(c *gin.Context) {
 
 	var req services.UpdateProductRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: "Invalid request body"})
+		log.Printf("ERROR: Failed to bind UpdateProductRequest: %v", err)
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "validation_error", Message: err.Error()})
 		return
 	}
 

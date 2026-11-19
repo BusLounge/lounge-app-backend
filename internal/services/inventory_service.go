@@ -39,12 +39,12 @@ type EnrollInventoryItemRequest struct {
 
 // DiscountRequest contains data for an optional discount
 type DiscountRequest struct {
-	DiscountName  string    `json:"discount_name"`
-	DiscountType  string    `json:"discount_type"` // PERCENTAGE or FIXED_AMOUNT
-	DiscountValue float64   `json:"discount_value"`
-	StartAt       time.Time `json:"start_at"`
-	EndAt         time.Time `json:"end_at"`
-	IsActive      bool      `json:"is_active"`
+	DiscountName  string     `json:"discount_name"`
+	DiscountType  string     `json:"discount_type"` // PERCENTAGE or FIXED_AMOUNT
+	DiscountValue float64    `json:"discount_value"`
+	StartAt       *time.Time `json:"start_at"`
+	EndAt         *time.Time `json:"end_at"`
+	IsActive      bool       `json:"is_active"`
 }
 
 // EnrollInventoryItem enrolls a master item into the lounge's inventory
@@ -80,8 +80,10 @@ func (s *InventoryService) EnrollInventoryItem(req *EnrollInventoryItemRequest, 
 		if req.Discount.DiscountType == string(models.DiscountTypePercentage) && req.Discount.DiscountValue > 100 {
 			return nil, errors.New("percentage discount_value cannot exceed 100")
 		}
-		if req.Discount.EndAt.Before(req.Discount.StartAt) || req.Discount.EndAt.Equal(req.Discount.StartAt) {
-			return nil, errors.New("end_at must be after start_at")
+		if req.Discount.StartAt != nil && req.Discount.EndAt != nil {
+			if req.Discount.EndAt.Before(*req.Discount.StartAt) || req.Discount.EndAt.Equal(*req.Discount.StartAt) {
+				return nil, errors.New("end_at must be after start_at")
+			}
 		}
 	}
 
@@ -172,14 +174,26 @@ func (s *InventoryService) EnrollInventoryItem(req *EnrollInventoryItemRequest, 
 
 	var discount *models.InventoryDiscount
 	if req.Discount != nil {
+		var startAt time.Time
+		if req.Discount.StartAt != nil {
+			startAt = *req.Discount.StartAt
+		} else {
+			startAt = now
+		}
+		var endAt time.Time
+		if req.Discount.EndAt != nil {
+			endAt = *req.Discount.EndAt
+		} else {
+			endAt = now.AddDate(0, 1, 0)
+		}
 		discount = &models.InventoryDiscount{
 			ID:              uuid.New(),
 			LoungeProductID: loungeProductID,
 			DiscountName:    req.Discount.DiscountName,
 			DiscountType:    models.DiscountType(req.Discount.DiscountType),
 			DiscountValue:   fmt.Sprintf("%.2f", req.Discount.DiscountValue),
-			StartAt:         req.Discount.StartAt,
-			EndAt:           req.Discount.EndAt,
+			StartAt:         startAt,
+			EndAt:           endAt,
 			IsActive:        req.Discount.IsActive,
 			CreatedByUserID: userID,
 			CreatedAt:       now,
@@ -227,7 +241,7 @@ func (s *InventoryService) UpdateLoungeProduct(req *UpdateProductRequest, lounge
 		return errors.New("reorder_level cannot be negative")
 	}
 
-	if req.Discount != nil {
+	if req.Discount != nil && req.Discount.IsActive {
 		if req.Discount.DiscountName == "" {
 			return errors.New("discount_name is required when discount is provided")
 		}
@@ -240,25 +254,36 @@ func (s *InventoryService) UpdateLoungeProduct(req *UpdateProductRequest, lounge
 		if req.Discount.DiscountType == string(models.DiscountTypePercentage) && req.Discount.DiscountValue > 100 {
 			return errors.New("percentage discount_value cannot exceed 100")
 		}
-		if req.Discount.EndAt.Before(req.Discount.StartAt) || req.Discount.EndAt.Equal(req.Discount.StartAt) {
-			return errors.New("end_at must be after start_at")
+		if req.Discount.StartAt != nil && req.Discount.EndAt != nil {
+			if req.Discount.EndAt.Before(*req.Discount.StartAt) || req.Discount.EndAt.Equal(*req.Discount.StartAt) {
+				return errors.New("end_at must be after start_at")
+			}
 		}
 	}
 
 	now := time.Now().UTC()
 	var discountedPrice *string
-	if req.Discount != nil && req.Discount.IsActive && req.Discount.StartAt.Before(now) && req.Discount.EndAt.After(now) {
-		var finalPrice float64
-		if req.Discount.DiscountType == string(models.DiscountTypePercentage) {
-			finalPrice = req.SellingPrice - (req.SellingPrice * req.Discount.DiscountValue / 100)
-		} else {
-			finalPrice = req.SellingPrice - req.Discount.DiscountValue
+	if req.Discount != nil && req.Discount.IsActive {
+		isWithinDates := true
+		if req.Discount.StartAt != nil && req.Discount.StartAt.After(now) {
+			isWithinDates = false
 		}
-		if finalPrice < 0 {
-			finalPrice = 0
+		if req.Discount.EndAt != nil && req.Discount.EndAt.Before(now) {
+			isWithinDates = false
 		}
-		formattedPrice := fmt.Sprintf("%.2f", finalPrice)
-		discountedPrice = &formattedPrice
+		if isWithinDates {
+			var finalPrice float64
+			if req.Discount.DiscountType == string(models.DiscountTypePercentage) {
+				finalPrice = req.SellingPrice - (req.SellingPrice * req.Discount.DiscountValue / 100)
+			} else {
+				finalPrice = req.SellingPrice - req.Discount.DiscountValue
+			}
+			if finalPrice < 0 {
+				finalPrice = 0
+			}
+			formattedPrice := fmt.Sprintf("%.2f", finalPrice)
+			discountedPrice = &formattedPrice
+		}
 	}
 
 	priceStr := fmt.Sprintf("%.2f", req.SellingPrice)
@@ -267,14 +292,26 @@ func (s *InventoryService) UpdateLoungeProduct(req *UpdateProductRequest, lounge
 	}
 
 	if req.Discount != nil {
+		var startAt time.Time
+		if req.Discount.StartAt != nil {
+			startAt = *req.Discount.StartAt
+		} else {
+			startAt = now
+		}
+		var endAt time.Time
+		if req.Discount.EndAt != nil {
+			endAt = *req.Discount.EndAt
+		} else {
+			endAt = now.AddDate(0, 1, 0)
+		}
 		discount := &models.InventoryDiscount{
 			ID:              uuid.New(),
 			LoungeProductID: productID,
 			DiscountName:    req.Discount.DiscountName,
 			DiscountType:    models.DiscountType(req.Discount.DiscountType),
 			DiscountValue:   fmt.Sprintf("%.2f", req.Discount.DiscountValue),
-			StartAt:         req.Discount.StartAt,
-			EndAt:           req.Discount.EndAt,
+			StartAt:         startAt,
+			EndAt:           endAt,
 			IsActive:        req.Discount.IsActive,
 			CreatedByUserID: userID,
 			CreatedAt:       now,
