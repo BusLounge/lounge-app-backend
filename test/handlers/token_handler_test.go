@@ -55,7 +55,8 @@ func setupTokenTestHandler(db *sqlx.DB) (*handlers.AuthHandler, *jwt.Service) {
 		},
 	}
 
-	auditService := services.NewAuditService(nil)
+	postgresDB := &database.PostgresDB{DB: db}
+	auditService := services.NewAuditService(postgresDB)
 	notificationService := services.NewNotificationService(nil, database.NewUserSessionRepository(db), database.NewLoungeRepository(db), nil)
 	passengerRepository := database.NewPassengerRepository(db)
 	loungeRepository := database.NewLoungeRepository(db)
@@ -189,6 +190,15 @@ func TestLogout_LogoutAll(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), userID).
 		WillReturnResult(sqlmock.NewResult(0, 3)) // Revoked 3 tokens
 
+	// Mock deactivate all user sessions
+	mock.ExpectExec("UPDATE user_sessions").
+		WithArgs(sqlmock.AnyArg(), userID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Mock audit log insert
+	mock.ExpectExec("INSERT INTO audit_logs").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -236,6 +246,10 @@ func TestLogout_SpecificToken(t *testing.T) {
 	// Mock revoke specific token
 	mock.ExpectExec("UPDATE refresh_tokens SET revoked").
 		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Mock audit log insert
+	mock.ExpectExec("INSERT INTO audit_logs").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
