@@ -1,6 +1,7 @@
-package validator
+package validator_test
 
 import (
+	"github.com/smarttransit/sms-auth-backend/pkg/validator"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,12 +9,12 @@ import (
 )
 
 func TestNewPhoneValidator(t *testing.T) {
-	validator := NewPhoneValidator()
-	assert.NotNil(t, validator)
+	v := validator.NewPhoneValidator()
+	assert.NotNil(t, v)
 }
 
 func TestValidate_ValidNumbers(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	validNumbers := []struct {
 		input    string
@@ -36,7 +37,7 @@ func TestValidate_ValidNumbers(t *testing.T) {
 
 	for _, tc := range validNumbers {
 		t.Run(tc.name, func(t *testing.T) {
-			sanitized, err := validator.Validate(tc.input)
+			sanitized, err := v.Validate(tc.input)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, sanitized)
 		})
@@ -44,28 +45,28 @@ func TestValidate_ValidNumbers(t *testing.T) {
 }
 
 func TestValidate_InvalidNumbers(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	invalidNumbers := []struct {
 		input       string
 		expectedErr error
 		name        string
 	}{
-		{"", ErrEmptyPhone, "Empty string"},
-		{"123", ErrInvalidLength, "Too short"},
-		{"07712345678", ErrInvalidLength, "Too long"},
-		{"0791234567", ErrInvalidPrefix, "Invalid prefix 079"},
-		{"0731234567", ErrInvalidPrefix, "Invalid prefix 073"},
-		{"0741234567", ErrInvalidPrefix, "Invalid prefix 074"},
-		{"077123456a", ErrInvalidFormat, "Contains letters"},
-		{"077-123-456a", ErrInvalidFormat, "Contains letters with dashes"},
-		{"077 123 456!", ErrInvalidFormat, "Contains special characters"},
-		{"1234567890", ErrInvalidPrefix, "Valid length but invalid prefix"},
+		{"", validator.ErrEmptyPhone, "Empty string"},
+		{"123", validator.ErrInvalidLength, "Too short"},
+		{"07712345678", validator.ErrInvalidLength, "Too long"},
+		{"0791234567", validator.ErrInvalidPrefix, "Invalid prefix 079"},
+		{"0731234567", validator.ErrInvalidPrefix, "Invalid prefix 073"},
+		{"0741234567", validator.ErrInvalidPrefix, "Invalid prefix 074"},
+		{"077123456a", validator.ErrInvalidFormat, "Contains letters"},
+		{"077-123-456a", validator.ErrInvalidFormat, "Contains letters with dashes"},
+		{"077 123 456!", validator.ErrInvalidFormat, "Contains special characters"},
+		{"1234567890", validator.ErrInvalidPrefix, "Valid length but invalid prefix"},
 	}
 
 	for _, tc := range invalidNumbers {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := validator.Validate(tc.input)
+			_, err := v.Validate(tc.input)
 			assert.Error(t, err)
 			assert.Equal(t, tc.expectedErr, err)
 		})
@@ -73,7 +74,7 @@ func TestValidate_InvalidNumbers(t *testing.T) {
 }
 
 func TestSanitize(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	tests := []struct {
 		input    string
@@ -94,14 +95,14 @@ func TestSanitize(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result := validator.Sanitize(tc.input)
+			result := v.Sanitize(tc.input)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
 
 func TestIsValidPrefix(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	validPrefixes := []string{
 		"0701234567",
@@ -115,7 +116,7 @@ func TestIsValidPrefix(t *testing.T) {
 
 	for _, phone := range validPrefixes {
 		t.Run(phone[:3], func(t *testing.T) {
-			assert.True(t, validator.IsValidPrefix(phone))
+			assert.True(t, v.IsValidPrefix(phone))
 		})
 	}
 
@@ -130,17 +131,17 @@ func TestIsValidPrefix(t *testing.T) {
 
 	for _, phone := range invalidPrefixes {
 		t.Run(phone[:3], func(t *testing.T) {
-			assert.False(t, validator.IsValidPrefix(phone))
+			assert.False(t, v.IsValidPrefix(phone))
 		})
 	}
 
 	// Edge cases
-	assert.False(t, validator.IsValidPrefix("07"))
-	assert.False(t, validator.IsValidPrefix(""))
+	assert.False(t, v.IsValidPrefix("07"))
+	assert.False(t, v.IsValidPrefix(""))
 }
 
 func TestFormat(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	tests := []struct {
 		input    string
@@ -157,19 +158,19 @@ func TestFormat(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := validator.Format(tc.input)
+			result, err := v.Format(tc.input)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
 
 	// Test invalid input
-	_, err := validator.Format("invalid")
+	_, err := v.Format("invalid")
 	assert.Error(t, err)
 }
 
 func TestGetOperator(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	tests := []struct {
 		input    string
@@ -189,19 +190,19 @@ func TestGetOperator(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			operator, err := validator.GetOperator(tc.input)
+			operator, err := v.GetOperator(tc.input)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, operator)
 		})
 	}
 
 	// Test invalid input
-	_, err := validator.GetOperator("invalid")
+	_, err := v.GetOperator("invalid")
 	assert.Error(t, err)
 }
 
 func TestValidateMultiple(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	phones := []string{
 		"0771234567", // Valid
@@ -212,7 +213,7 @@ func TestValidateMultiple(t *testing.T) {
 		"0791234567", // Invalid prefix
 	}
 
-	results := validator.ValidateMultiple(phones)
+	results := v.ValidateMultiple(phones)
 
 	assert.Len(t, results, 6)
 	assert.Nil(t, results["0771234567"])
@@ -224,7 +225,7 @@ func TestValidateMultiple(t *testing.T) {
 }
 
 func TestIsValid(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	validNumbers := []string{
 		"0771234567",
@@ -236,7 +237,7 @@ func TestIsValid(t *testing.T) {
 
 	for _, phone := range validNumbers {
 		t.Run(phone, func(t *testing.T) {
-			assert.True(t, validator.IsValid(phone))
+			assert.True(t, v.IsValid(phone))
 		})
 	}
 
@@ -250,26 +251,26 @@ func TestIsValid(t *testing.T) {
 
 	for _, phone := range invalidNumbers {
 		t.Run(phone, func(t *testing.T) {
-			assert.False(t, validator.IsValid(phone))
+			assert.False(t, v.IsValid(phone))
 		})
 	}
 }
 
 func TestMustValidate(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	// Test valid phone
-	result := validator.MustValidate("0771234567")
+	result := v.MustValidate("0771234567")
 	assert.Equal(t, "0771234567", result)
 
 	// Test invalid phone (should panic)
 	assert.Panics(t, func() {
-		validator.MustValidate("invalid")
+		v.MustValidate("invalid")
 	})
 }
 
 func TestCountryCodeHandling(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	tests := []struct {
 		input    string
@@ -285,7 +286,7 @@ func TestCountryCodeHandling(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			sanitized, err := validator.Validate(tc.input)
+			sanitized, err := v.Validate(tc.input)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, sanitized)
 		})
@@ -293,33 +294,33 @@ func TestCountryCodeHandling(t *testing.T) {
 }
 
 func TestEdgeCases(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	t.Run("Phone with only spaces", func(t *testing.T) {
-		_, err := validator.Validate("     ")
+		_, err := v.Validate("     ")
 		assert.Error(t, err)
 	})
 
 	t.Run("Phone with mixed separators", func(t *testing.T) {
-		sanitized, err := validator.Validate("077-123 4567")
+		sanitized, err := v.Validate("077-123 4567")
 		require.NoError(t, err)
 		assert.Equal(t, "0771234567", sanitized)
 	})
 
 	t.Run("Phone with unicode characters", func(t *testing.T) {
-		_, err := validator.Validate("077१२३4567") // Contains Devanagari digits
+		_, err := v.Validate("077१२३4567") // Contains Devanagari digits
 		assert.Error(t, err)
 	})
 
 	t.Run("Very long input", func(t *testing.T) {
-		_, err := validator.Validate("077123456789012345678901234567890")
+		_, err := v.Validate("077123456789012345678901234567890")
 		assert.Error(t, err)
-		assert.Equal(t, ErrInvalidLength, err)
+		assert.Equal(t, validator.ErrInvalidLength, err)
 	})
 }
 
 func TestConcurrentValidation(t *testing.T) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 
 	done := make(chan bool)
 	errors := make(chan error, 100)
@@ -335,7 +336,7 @@ func TestConcurrentValidation(t *testing.T) {
 	// Validate 100 phones concurrently
 	for i := 0; i < 100; i++ {
 		go func(phone string) {
-			_, err := validator.Validate(phone)
+			_, err := v.Validate(phone)
 			if err != nil {
 				errors <- err
 			}
@@ -353,31 +354,31 @@ func TestConcurrentValidation(t *testing.T) {
 }
 
 func BenchmarkValidate(b *testing.B) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 	phone := "0771234567"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = validator.Validate(phone)
+		_, _ = v.Validate(phone)
 	}
 }
 
 func BenchmarkSanitize(b *testing.B) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 	phone := "077-123-4567"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = validator.Sanitize(phone)
+		_ = v.Sanitize(phone)
 	}
 }
 
 func BenchmarkFormat(b *testing.B) {
-	validator := NewPhoneValidator()
+	v := validator.NewPhoneValidator()
 	phone := "0771234567"
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = validator.Format(phone)
+		_, _ = v.Format(phone)
 	}
 }

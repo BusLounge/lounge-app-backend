@@ -1,6 +1,7 @@
-package services
+package services_test
 
 import (
+	"github.com/smarttransit/sms-auth-backend/internal/services"
 	"database/sql"
 	"testing"
 	"time"
@@ -12,13 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupRateLimitTest(t *testing.T) (*RateLimitService, sqlmock.Sqlmock, func()) {
+func setupRateLimitTest(t *testing.T) (*services.RateLimitService, sqlmock.Sqlmock, func()) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 
 	sqlxDB := sqlx.NewDb(db, "sqlmock")
 	postgresDB := &database.PostgresDB{DB: sqlxDB}
-	service := NewRateLimitService(postgresDB)
+	service := services.NewRateLimitService(postgresDB)
 
 	cleanup := func() {
 		db.Close()
@@ -68,8 +69,8 @@ func TestCheckOTPRateLimit_PhoneExceeded(t *testing.T) {
 	err := service.CheckOTPRateLimit(phone, ip)
 	assert.Error(t, err)
 
-	rateLimitErr, ok := err.(*RateLimitError)
-	require.True(t, ok, "Error should be RateLimitError")
+	rateLimitErr, ok := err.(*services.RateLimitError)
+	require.True(t, ok, "Error should be services.RateLimitError")
 	assert.Equal(t, "phone", rateLimitErr.Type)
 	assert.Contains(t, rateLimitErr.Message, "Too many OTP requests for this phone number")
 	assert.True(t, rateLimitErr.RetryAfter.After(time.Now()))
@@ -100,8 +101,8 @@ func TestCheckOTPRateLimit_IPExceeded(t *testing.T) {
 	err := service.CheckOTPRateLimit(phone, ip)
 	assert.Error(t, err)
 
-	rateLimitErr, ok := err.(*RateLimitError)
-	require.True(t, ok, "Error should be RateLimitError")
+	rateLimitErr, ok := err.(*services.RateLimitError)
+	require.True(t, ok, "Error should be services.RateLimitError")
 	assert.Equal(t, "ip", rateLimitErr.Type)
 	assert.Contains(t, rateLimitErr.Message, "Too many OTP requests from this IP address")
 
@@ -315,7 +316,7 @@ func TestCheckOTPRateLimit_DatabaseError(t *testing.T) {
 }
 
 func TestDefaultRateLimitConfig(t *testing.T) {
-	config := DefaultRateLimitConfig()
+	config := services.DefaultRateLimitConfig()
 
 	assert.Equal(t, 3, config.MaxPhoneRequests)
 	assert.Equal(t, 10*time.Minute, config.PhoneWindow)

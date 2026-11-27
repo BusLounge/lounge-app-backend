@@ -1,6 +1,7 @@
-package handlers
+package handlers_test
 
 import (
+	"github.com/smarttransit/sms-auth-backend/internal/handlers"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -34,7 +35,7 @@ func setupTestDB(t *testing.T) (*sqlx.DB, sqlmock.Sqlmock) {
 }
 
 // setupProfileTestHandler creates a test handler
-func setupProfileTestHandler(repo *database.UserRepository, db *sqlx.DB) *AuthHandler {
+func setupProfileTestHandler(repo *database.UserRepository, db *sqlx.DB) *handlers.AuthHandler {
 	jwtService := jwt.NewService("test-secret", "test-refresh-secret", 1*time.Hour, 7*24*time.Hour)
 	otpService := services.NewOTPService(nil)
 	phoneValidator := validator.NewPhoneValidator()
@@ -62,7 +63,7 @@ func setupProfileTestHandler(repo *database.UserRepository, db *sqlx.DB) *AuthHa
 	loungeRepository := database.NewLoungeRepository(db)
 	userSessionRepository := database.NewUserSessionRepository(db)
 
-	return NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, notificationService, repo, passengerRepository, refreshTokenRepository, userSessionRepository, smsGateway, cfg, loungeRepository)
+	return handlers.NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, notificationService, repo, passengerRepository, refreshTokenRepository, userSessionRepository, smsGateway, cfg, loungeRepository)
 }
 
 // setupAuthenticatedContext creates a Gin context with authenticated user
@@ -112,7 +113,7 @@ func TestGetProfile_NoUserContext(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -142,7 +143,7 @@ func TestGetProfile_UserNotFound(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -162,7 +163,7 @@ func TestUpdateProfile_NoUserContext(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	updateReq := UpdateProfileRequest{
+	updateReq := handlers.UpdateProfileRequest{
 		FirstName:  "Jane",
 		LastName:   "Smith",
 		Email:      "jane@example.com",
@@ -180,7 +181,7 @@ func TestUpdateProfile_NoUserContext(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -213,7 +214,7 @@ func TestUpdateProfile_InvalidRequest(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -232,7 +233,7 @@ func TestUpdateProfile_InvalidEmail(t *testing.T) {
 	c, w := setupAuthenticatedContext(userID, phone)
 
 	// Invalid email format
-	invalidReq := UpdateProfileRequest{
+	invalidReq := handlers.UpdateProfileRequest{
 		FirstName:  "Jane",
 		LastName:   "Smith",
 		Email:      "not-an-email", // Invalid email
@@ -250,7 +251,7 @@ func TestUpdateProfile_InvalidEmail(t *testing.T) {
 	// Check response
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 

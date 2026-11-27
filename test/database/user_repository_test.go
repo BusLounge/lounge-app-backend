@@ -1,6 +1,7 @@
-package database
+package database_test
 
 import (
+	"github.com/smarttransit/sms-auth-backend/internal/database"
 	"database/sql"
 	"fmt"
 	"testing"
@@ -18,7 +19,7 @@ func TestCreateUser(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		phone := "+94712345678"
@@ -87,7 +88,7 @@ func TestGetUserByPhone(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		phone := "+94712345678"
@@ -157,7 +158,7 @@ func TestGetUserByID(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -210,7 +211,7 @@ func TestUpdateProfile(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -269,7 +270,7 @@ func TestIsProfileComplete(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Complete Profile", func(t *testing.T) {
 		userID := uuid.New()
@@ -341,7 +342,7 @@ func TestUpdateProfileCompletion(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Mark Complete", func(t *testing.T) {
 		userID := uuid.New()
@@ -407,7 +408,7 @@ func TestGetOrCreateUser(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Get Existing User", func(t *testing.T) {
 		phone := "+94712345678"
@@ -477,7 +478,7 @@ func TestUpdateUserStatus(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Update to Active", func(t *testing.T) {
 		userID := uuid.New()
@@ -528,7 +529,7 @@ func TestAddUserRole(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -566,7 +567,7 @@ func TestRemoveUserRole(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -604,7 +605,7 @@ func TestListUsers(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		now := time.Now()
@@ -670,7 +671,7 @@ func TestCountUsers(t *testing.T) {
 	defer db.Close()
 
 	mockDB := &mockDatabase{db: db}
-	repo := NewUserRepository(mockDB)
+	repo := database.NewUserRepository(mockDB)
 
 	t.Run("Success", func(t *testing.T) {
 		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users`).

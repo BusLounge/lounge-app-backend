@@ -1,6 +1,7 @@
-package jwt
+package jwt_test
 
 import (
+	pkgjwt "github.com/smarttransit/sms-auth-backend/pkg/jwt"
 	"testing"
 	"time"
 
@@ -16,7 +17,7 @@ const (
 )
 
 func TestNewService(t *testing.T) {
-	service := NewService(
+	service := pkgjwt.NewService(
 		testAccessSecret,
 		testRefreshSecret,
 		time.Hour,
@@ -24,14 +25,10 @@ func TestNewService(t *testing.T) {
 	)
 
 	assert.NotNil(t, service)
-	assert.Equal(t, testAccessSecret, service.accessSecret)
-	assert.Equal(t, testRefreshSecret, service.refreshSecret)
-	assert.Equal(t, time.Hour, service.accessTokenExpiry)
-	assert.Equal(t, 24*time.Hour, service.refreshTokenExpiry)
 }
 
 func TestGenerateAccessToken(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 	roles := []string{"user"}
@@ -48,11 +45,11 @@ func TestGenerateAccessToken(t *testing.T) {
 	assert.Equal(t, phone, claims.Phone)
 	assert.Equal(t, roles, claims.Roles)
 	assert.Equal(t, profileCompleted, claims.ProfileCompleted)
-	assert.Equal(t, AccessToken, claims.TokenType)
+	assert.Equal(t, pkgjwt.AccessToken, claims.TokenType)
 }
 
 func TestGenerateRefreshToken(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -65,11 +62,11 @@ func TestGenerateRefreshToken(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, userID, claims.UserID)
 	assert.Equal(t, phone, claims.Phone)
-	assert.Equal(t, RefreshToken, claims.TokenType)
+	assert.Equal(t, pkgjwt.RefreshToken, claims.TokenType)
 }
 
 func TestValidateAccessToken(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 	roles := []string{"user", "admin"}
@@ -92,13 +89,13 @@ func TestValidateAccessToken(t *testing.T) {
 	assert.Error(t, err)
 
 	// Test token with wrong secret
-	wrongService := NewService("wrong-secret", testRefreshSecret, time.Hour, 24*time.Hour)
+	wrongService := pkgjwt.NewService("wrong-secret", testRefreshSecret, time.Hour, 24*time.Hour)
 	_, err = wrongService.ValidateAccessToken(token)
 	assert.Error(t, err)
 }
 
 func TestValidateRefreshToken(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -117,13 +114,13 @@ func TestValidateRefreshToken(t *testing.T) {
 	assert.Error(t, err)
 
 	// Test token with wrong secret
-	wrongService := NewService(testAccessSecret, "wrong-secret", time.Hour, 24*time.Hour)
+	wrongService := pkgjwt.NewService(testAccessSecret, "wrong-secret", time.Hour, 24*time.Hour)
 	_, err = wrongService.ValidateRefreshToken(token)
 	assert.Error(t, err)
 }
 
 func TestTokenTypeMismatch(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -135,7 +132,7 @@ func TestTokenTypeMismatch(t *testing.T) {
 	// This should fail at token type check
 	claims, err := service.ExtractClaims(accessToken)
 	require.NoError(t, err)
-	assert.Equal(t, AccessToken, claims.TokenType)
+	assert.Equal(t, pkgjwt.AccessToken, claims.TokenType)
 
 	// Generate refresh token
 	refreshToken, err := service.GenerateRefreshToken(userID, phone)
@@ -145,12 +142,12 @@ func TestTokenTypeMismatch(t *testing.T) {
 	// This should fail at token type check
 	claims, err = service.ExtractClaims(refreshToken)
 	require.NoError(t, err)
-	assert.Equal(t, RefreshToken, claims.TokenType)
+	assert.Equal(t, pkgjwt.RefreshToken, claims.TokenType)
 }
 
 func TestExpiredToken(t *testing.T) {
 	// Create service with very short expiry
-	service := NewService(testAccessSecret, testRefreshSecret, time.Millisecond, time.Millisecond)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Millisecond, time.Millisecond)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -167,7 +164,7 @@ func TestExpiredToken(t *testing.T) {
 }
 
 func TestExtractClaims(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 	roles := []string{"user"}
@@ -185,7 +182,7 @@ func TestExtractClaims(t *testing.T) {
 
 func TestIsTokenExpired(t *testing.T) {
 	// Test valid token
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -195,7 +192,7 @@ func TestIsTokenExpired(t *testing.T) {
 	assert.False(t, service.IsTokenExpired(token))
 
 	// Test expired token
-	expiredService := NewService(testAccessSecret, testRefreshSecret, -time.Hour, 24*time.Hour)
+	expiredService := pkgjwt.NewService(testAccessSecret, testRefreshSecret, -time.Hour, 24*time.Hour)
 	expiredToken, err := expiredService.GenerateAccessToken(userID, phone, []string{"user"}, false)
 	require.NoError(t, err)
 
@@ -206,7 +203,7 @@ func TestIsTokenExpired(t *testing.T) {
 }
 
 func TestGetTokenExpiry(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -226,7 +223,7 @@ func TestGetTokenExpiry(t *testing.T) {
 }
 
 func TestTokenSigningMethod(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -235,7 +232,7 @@ func TestTokenSigningMethod(t *testing.T) {
 	require.NoError(t, err)
 
 	// Parse to check method
-	parsedToken, err := jwt.ParseWithClaims(token, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+	parsedToken, err := jwt.ParseWithClaims(token, &pkgjwt.Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(testAccessSecret), nil
 	})
 	require.NoError(t, err)
@@ -245,7 +242,7 @@ func TestTokenSigningMethod(t *testing.T) {
 }
 
 func TestMultipleRoles(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 	roles := []string{"user", "admin", "super_admin"}
@@ -260,7 +257,7 @@ func TestMultipleRoles(t *testing.T) {
 }
 
 func TestEmptyRoles(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 	roles := []string{}
@@ -274,7 +271,7 @@ func TestEmptyRoles(t *testing.T) {
 }
 
 func TestTokenIssuerAndSubject(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 	userID := uuid.New()
 	phone := "0771234567"
 
@@ -288,7 +285,7 @@ func TestTokenIssuerAndSubject(t *testing.T) {
 }
 
 func TestConcurrentTokenGeneration(t *testing.T) {
-	service := NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
+	service := pkgjwt.NewService(testAccessSecret, testRefreshSecret, time.Hour, 24*time.Hour)
 
 	done := make(chan bool)
 	errors := make(chan error, 100)

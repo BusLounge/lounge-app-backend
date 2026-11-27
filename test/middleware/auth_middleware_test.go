@@ -1,6 +1,7 @@
-package middleware
+package middleware_test
 
 import (
+	"github.com/smarttransit/sms-auth-backend/internal/middleware"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -43,8 +44,8 @@ func TestAuthMiddleware_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Setup protected route
-	router.GET("/protected", AuthMiddleware(jwtService), func(c *gin.Context) {
-		userCtx, exists := GetUserContext(c)
+	router.GET("/protected", middleware.AuthMiddleware(jwtService), func(c *gin.Context) {
+		userCtx, exists := middleware.GetUserContext(c)
 		require.True(t, exists)
 		c.JSON(http.StatusOK, gin.H{
 			"message": "success",
@@ -69,7 +70,7 @@ func TestAuthMiddleware_MissingAuthHeader(t *testing.T) {
 	jwtService := setupTestJWTService()
 	router := setupTestRouter(jwtService)
 
-	router.GET("/protected", AuthMiddleware(jwtService), func(c *gin.Context) {
+	router.GET("/protected", middleware.AuthMiddleware(jwtService), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 	})
 
@@ -87,7 +88,7 @@ func TestAuthMiddleware_InvalidAuthFormat(t *testing.T) {
 	jwtService := setupTestJWTService()
 	router := setupTestRouter(jwtService)
 
-	router.GET("/protected", AuthMiddleware(jwtService), func(c *gin.Context) {
+	router.GET("/protected", middleware.AuthMiddleware(jwtService), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 	})
 
@@ -119,7 +120,7 @@ func TestAuthMiddleware_InvalidToken(t *testing.T) {
 	jwtService := setupTestJWTService()
 	router := setupTestRouter(jwtService)
 
-	router.GET("/protected", AuthMiddleware(jwtService), func(c *gin.Context) {
+	router.GET("/protected", middleware.AuthMiddleware(jwtService), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 	})
 
@@ -171,7 +172,7 @@ func TestAuthMiddleware_ExpiredToken(t *testing.T) {
 	// Wait for token to expire
 	time.Sleep(10 * time.Millisecond)
 
-	router.GET("/protected", AuthMiddleware(jwtService), func(c *gin.Context) {
+	router.GET("/protected", middleware.AuthMiddleware(jwtService), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 	})
 
@@ -201,7 +202,7 @@ func TestAuthMiddleware_WrongSecret(t *testing.T) {
 	require.NoError(t, err)
 
 	router := setupTestRouter(jwtService)
-	router.GET("/protected", AuthMiddleware(jwtService), func(c *gin.Context) {
+	router.GET("/protected", middleware.AuthMiddleware(jwtService), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 	})
 
@@ -220,16 +221,16 @@ func TestGetUserContext(t *testing.T) {
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
 
 	t.Run("Context exists", func(t *testing.T) {
-		expectedCtx := UserContext{
+		expectedCtx := middleware.UserContext{
 			UserID:           uuid.New(),
 			Phone:            "+94712345678",
 			Roles:            []string{"passenger"},
 			ProfileCompleted: true,
 		}
 
-		c.Set(UserContextKey, expectedCtx)
+		c.Set(middleware.UserContextKey, expectedCtx)
 
-		userCtx, exists := GetUserContext(c)
+		userCtx, exists := middleware.GetUserContext(c)
 		assert.True(t, exists)
 		assert.Equal(t, expectedCtx.UserID, userCtx.UserID)
 		assert.Equal(t, expectedCtx.Phone, userCtx.Phone)
@@ -239,17 +240,17 @@ func TestGetUserContext(t *testing.T) {
 
 	t.Run("Context not found", func(t *testing.T) {
 		c2, _ := gin.CreateTestContext(httptest.NewRecorder())
-		userCtx, exists := GetUserContext(c2)
+		userCtx, exists := middleware.GetUserContext(c2)
 		assert.False(t, exists)
-		assert.Equal(t, UserContext{}, userCtx)
+		assert.Equal(t, middleware.UserContext{}, userCtx)
 	})
 
 	t.Run("Context wrong type", func(t *testing.T) {
 		c3, _ := gin.CreateTestContext(httptest.NewRecorder())
-		c3.Set(UserContextKey, "wrong type")
-		userCtx, exists := GetUserContext(c3)
+		c3.Set(middleware.UserContextKey, "wrong type")
+		userCtx, exists := middleware.GetUserContext(c3)
 		assert.False(t, exists)
-		assert.Equal(t, UserContext{}, userCtx)
+		assert.Equal(t, middleware.UserContext{}, userCtx)
 	})
 }
 
@@ -258,14 +259,14 @@ func TestMustGetUserContext(t *testing.T) {
 
 	t.Run("Context exists - no panic", func(t *testing.T) {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
-		expectedCtx := UserContext{
+		expectedCtx := middleware.UserContext{
 			UserID: uuid.New(),
 			Phone:  "+94712345678",
 		}
-		c.Set(UserContextKey, expectedCtx)
+		c.Set(middleware.UserContextKey, expectedCtx)
 
 		assert.NotPanics(t, func() {
-			userCtx := MustGetUserContext(c)
+			userCtx := middleware.MustGetUserContext(c)
 			assert.Equal(t, expectedCtx.UserID, userCtx.UserID)
 		})
 	})
@@ -273,7 +274,7 @@ func TestMustGetUserContext(t *testing.T) {
 	t.Run("Context not found - panic", func(t *testing.T) {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		assert.Panics(t, func() {
-			MustGetUserContext(c)
+			middleware.MustGetUserContext(c)
 		})
 	})
 }
@@ -290,7 +291,7 @@ func TestRequireRole(t *testing.T) {
 		token, err := jwtService.GenerateAccessToken(userID, phone, roles, true)
 		require.NoError(t, err)
 
-		router.GET("/driver-only", AuthMiddleware(jwtService), RequireRole("driver"), func(c *gin.Context) {
+		router.GET("/driver-only", middleware.AuthMiddleware(jwtService), middleware.RequireRole("driver"), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "success"})
 		})
 
@@ -310,7 +311,7 @@ func TestRequireRole(t *testing.T) {
 		require.NoError(t, err)
 
 		router2 := setupTestRouter(jwtService)
-		router2.GET("/admin-only", AuthMiddleware(jwtService), RequireRole("admin"), func(c *gin.Context) {
+		router2.GET("/admin-only", middleware.AuthMiddleware(jwtService), middleware.RequireRole("admin"), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 		})
 
@@ -330,7 +331,7 @@ func TestRequireRole(t *testing.T) {
 		require.NoError(t, err)
 
 		router3 := setupTestRouter(jwtService)
-		router3.GET("/multi-role", AuthMiddleware(jwtService), RequireRole("admin", "driver", "passenger"), func(c *gin.Context) {
+		router3.GET("/multi-role", middleware.AuthMiddleware(jwtService), middleware.RequireRole("admin", "driver", "passenger"), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "success"})
 		})
 
@@ -346,8 +347,8 @@ func TestRequireRole(t *testing.T) {
 
 	t.Run("No user context", func(t *testing.T) {
 		router4 := setupTestRouter(jwtService)
-		// Note: RequireRole without AuthMiddleware
-		router4.GET("/no-auth", RequireRole("admin"), func(c *gin.Context) {
+		// Note: middleware.RequireRole without middleware.AuthMiddleware
+		router4.GET("/no-auth", middleware.RequireRole("admin"), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 		})
 
@@ -373,7 +374,7 @@ func TestRequireProfileComplete(t *testing.T) {
 		token, err := jwtService.GenerateAccessToken(userID, phone, roles, true)
 		require.NoError(t, err)
 
-		router.GET("/complete-profile-required", AuthMiddleware(jwtService), RequireProfileComplete(), func(c *gin.Context) {
+		router.GET("/complete-profile-required", middleware.AuthMiddleware(jwtService), middleware.RequireProfileComplete(), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "success"})
 		})
 
@@ -392,7 +393,7 @@ func TestRequireProfileComplete(t *testing.T) {
 		require.NoError(t, err)
 
 		router2 := setupTestRouter(jwtService)
-		router2.GET("/complete-profile-required", AuthMiddleware(jwtService), RequireProfileComplete(), func(c *gin.Context) {
+		router2.GET("/complete-profile-required", middleware.AuthMiddleware(jwtService), middleware.RequireProfileComplete(), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 		})
 
@@ -408,7 +409,7 @@ func TestRequireProfileComplete(t *testing.T) {
 
 	t.Run("No user context", func(t *testing.T) {
 		router3 := setupTestRouter(jwtService)
-		router3.GET("/no-auth", RequireProfileComplete(), func(c *gin.Context) {
+		router3.GET("/no-auth", middleware.RequireProfileComplete(), func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "should not reach here"})
 		})
 
@@ -435,8 +436,8 @@ func TestAuthMiddleware_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Setup multiple protected routes with different requirements
-	router.GET("/profile", AuthMiddleware(jwtService), func(c *gin.Context) {
-		userCtx := MustGetUserContext(c)
+	router.GET("/profile", middleware.AuthMiddleware(jwtService), func(c *gin.Context) {
+		userCtx := middleware.MustGetUserContext(c)
 		c.JSON(http.StatusOK, gin.H{
 			"user_id":           userCtx.UserID,
 			"phone":             userCtx.Phone,
@@ -446,16 +447,16 @@ func TestAuthMiddleware_Integration(t *testing.T) {
 	})
 
 	router.GET("/driver-dashboard",
-		AuthMiddleware(jwtService),
-		RequireRole("driver"),
-		RequireProfileComplete(),
+		middleware.AuthMiddleware(jwtService),
+		middleware.RequireRole("driver"),
+		middleware.RequireProfileComplete(),
 		func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "driver dashboard"})
 		})
 
 	router.GET("/admin-panel",
-		AuthMiddleware(jwtService),
-		RequireRole("admin"),
+		middleware.AuthMiddleware(jwtService),
+		middleware.RequireRole("admin"),
 		func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"message": "admin panel"})
 		})

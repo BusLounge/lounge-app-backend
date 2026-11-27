@@ -1,6 +1,7 @@
-package handlers
+package handlers_test
 
 import (
+	"github.com/smarttransit/sms-auth-backend/internal/handlers"
 	"bytes"
 	"encoding/json"
 	"net/http"
@@ -31,7 +32,7 @@ func setupTokenTestDB(t *testing.T) (*sqlx.DB, sqlmock.Sqlmock) {
 	return sqlxDB, mock
 }
 
-func setupTokenTestHandler(db *sqlx.DB) (*AuthHandler, *jwt.Service) {
+func setupTokenTestHandler(db *sqlx.DB) (*handlers.AuthHandler, *jwt.Service) {
 	jwtService := jwt.NewService("test-secret", "test-refresh-secret", 1*time.Hour, 7*24*time.Hour)
 	otpService := services.NewOTPService(nil)
 	phoneValidator := validator.NewPhoneValidator()
@@ -60,7 +61,7 @@ func setupTokenTestHandler(db *sqlx.DB) (*AuthHandler, *jwt.Service) {
 	loungeRepository := database.NewLoungeRepository(db)
 	userSessionRepository := database.NewUserSessionRepository(db)
 
-	handler := NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, notificationService, userRepository, passengerRepository, refreshTokenRepository, userSessionRepository, smsGateway, cfg, loungeRepository)
+	handler := handlers.NewAuthHandler(jwtService, otpService, phoneValidator, rateLimitService, auditService, notificationService, userRepository, passengerRepository, refreshTokenRepository, userSessionRepository, smsGateway, cfg, loungeRepository)
 	return handler, jwtService
 }
 
@@ -100,7 +101,7 @@ func TestRefreshToken_RevokedToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	reqBody := RefreshTokenRequest{
+	reqBody := handlers.RefreshTokenRequest{
 		RefreshToken: refreshToken,
 	}
 	body, _ := json.Marshal(reqBody)
@@ -111,7 +112,7 @@ func TestRefreshToken_RevokedToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -128,7 +129,7 @@ func TestRefreshToken_InvalidToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	reqBody := RefreshTokenRequest{
+	reqBody := handlers.RefreshTokenRequest{
 		RefreshToken: "invalid-token",
 	}
 	body, _ := json.Marshal(reqBody)
@@ -139,7 +140,7 @@ func TestRefreshToken_InvalidToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -156,7 +157,7 @@ func TestRefreshToken_MissingToken(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	reqBody := RefreshTokenRequest{
+	reqBody := handlers.RefreshTokenRequest{
 		// Missing refresh token
 	}
 	body, _ := json.Marshal(reqBody)
@@ -167,7 +168,7 @@ func TestRefreshToken_MissingToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
@@ -201,7 +202,7 @@ func TestLogout_LogoutAll(t *testing.T) {
 	}
 	c.Set(middleware.UserContextKey, userCtx)
 
-	reqBody := LogoutRequest{
+	reqBody := handlers.LogoutRequest{
 		LogoutAll: true,
 	}
 	body, _ := json.Marshal(reqBody)
@@ -249,7 +250,7 @@ func TestLogout_SpecificToken(t *testing.T) {
 	}
 	c.Set(middleware.UserContextKey, userCtx)
 
-	reqBody := LogoutRequest{
+	reqBody := handlers.LogoutRequest{
 		RefreshToken: refreshToken,
 		LogoutAll:    false,
 	}
@@ -280,7 +281,7 @@ func TestLogout_NoUserContext(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	// No user context set
 
-	reqBody := LogoutRequest{
+	reqBody := handlers.LogoutRequest{
 		LogoutAll: true,
 	}
 	body, _ := json.Marshal(reqBody)
@@ -291,7 +292,7 @@ func TestLogout_NoUserContext(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 
-	var response ErrorResponse
+	var response handlers.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
