@@ -141,7 +141,7 @@ func (v *PhoneValidator) GetOperator(phone string) (string, error) {
 		return "Hutch", nil
 	case "075":
 		return "Airtel", nil
-	case "076", "077":
+	case "074", "076", "077", "079":
 		return "Dialog", nil
 	default:
 		return "", ErrInvalidPrefix
