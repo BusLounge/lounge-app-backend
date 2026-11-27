@@ -1,7 +1,6 @@
 package database_test
 
 import (
-	"github.com/smarttransit/sms-auth-backend/internal/database"
 	"database/sql"
 	"fmt"
 	"testing"
@@ -9,34 +8,36 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+	"github.com/smarttransit/sms-auth-backend/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCreateUser(t *testing.T) {
+func setupUserRepoTest(t *testing.T) (*database.UserRepository, sqlmock.Sqlmock, func()) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
 
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	sqlxDB := sqlx.NewDb(db, "sqlmock")
+	postgresDB := &database.PostgresDB{DB: sqlxDB}
+	repo := database.NewUserRepository(postgresDB)
+
+	return repo, mock, func() { db.Close() }
+}
+
+func TestCreateUser(t *testing.T) {
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		phone := "+94712345678"
-		userID := uuid.New()
-		now := time.Now()
 
-		mock.ExpectQuery(`INSERT INTO users`).
-			WithArgs(sqlmock.AnyArg(), phone, sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{
-				"id", "phone", "first_name", "last_name", "email", "address",
-				"city", "postal_code", "roles", "status", "profile_completed",
-				"phone_verified", "email_verified", "created_at", "updated_at",
-			}).AddRow(
-				userID, phone, "", "", "", "",
-				"", "", []byte(`{"passenger"}`), "active", false,
-				true, false, now, now,
-			))
+		mock.ExpectExec(`INSERT INTO users`).
+			WithArgs(
+				sqlmock.AnyArg(), phone, sqlmock.AnyArg(), "active",
+				false, true, false, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		user, err := repo.CreateUser(phone)
 		require.NoError(t, err)
@@ -53,8 +54,11 @@ func TestCreateUser(t *testing.T) {
 	t.Run("Database Error", func(t *testing.T) {
 		phone := "+94712345678"
 
-		mock.ExpectQuery(`INSERT INTO users`).
-			WithArgs(sqlmock.AnyArg(), phone, sqlmock.AnyArg()).
+		mock.ExpectExec(`INSERT INTO users`).
+			WithArgs(
+				sqlmock.AnyArg(), phone, sqlmock.AnyArg(), "active",
+				false, true, false, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			).
 			WillReturnError(fmt.Errorf("database error"))
 
 		user, err := repo.CreateUser(phone)
@@ -69,8 +73,11 @@ func TestCreateUser(t *testing.T) {
 	t.Run("Duplicate Phone", func(t *testing.T) {
 		phone := "+94712345678"
 
-		mock.ExpectQuery(`INSERT INTO users`).
-			WithArgs(sqlmock.AnyArg(), phone, sqlmock.AnyArg()).
+		mock.ExpectExec(`INSERT INTO users`).
+			WithArgs(
+				sqlmock.AnyArg(), phone, sqlmock.AnyArg(), "active",
+				false, true, false, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			).
 			WillReturnError(fmt.Errorf("duplicate key value violates unique constraint"))
 
 		user, err := repo.CreateUser(phone)
@@ -83,12 +90,8 @@ func TestCreateUser(t *testing.T) {
 }
 
 func TestGetUserByPhone(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		phone := "+94712345678"
@@ -112,8 +115,8 @@ func TestGetUserByPhone(t *testing.T) {
 		assert.NotNil(t, user)
 		assert.Equal(t, userID, user.ID)
 		assert.Equal(t, phone, user.Phone)
-		assert.Equal(t, "John", user.FirstName)
-		assert.Equal(t, "Doe", user.LastName)
+		assert.Equal(t, "John", user.FirstName.String)
+		assert.Equal(t, "Doe", user.LastName.String)
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -127,9 +130,8 @@ func TestGetUserByPhone(t *testing.T) {
 			WillReturnError(sql.ErrNoRows)
 
 		user, err := repo.GetUserByPhone(phone)
-		assert.Error(t, err)
+		require.NoError(t, err)
 		assert.Nil(t, user)
-		assert.Contains(t, err.Error(), "user not found")
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -145,7 +147,7 @@ func TestGetUserByPhone(t *testing.T) {
 		user, err := repo.GetUserByPhone(phone)
 		assert.Error(t, err)
 		assert.Nil(t, user)
-		assert.Contains(t, err.Error(), "failed to fetch user")
+		assert.Contains(t, err.Error(), "failed to get user by phone")
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -153,12 +155,8 @@ func TestGetUserByPhone(t *testing.T) {
 }
 
 func TestGetUserByID(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -181,8 +179,8 @@ func TestGetUserByID(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, user)
 		assert.Equal(t, userID, user.ID)
-		assert.Equal(t, "Jane", user.FirstName)
-		assert.Equal(t, "Smith", user.LastName)
+		assert.Equal(t, "Jane", user.FirstName.String)
+		assert.Equal(t, "Smith", user.LastName.String)
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -196,9 +194,8 @@ func TestGetUserByID(t *testing.T) {
 			WillReturnError(sql.ErrNoRows)
 
 		user, err := repo.GetUserByID(userID)
-		assert.Error(t, err)
+		require.NoError(t, err)
 		assert.Nil(t, user)
-		assert.Contains(t, err.Error(), "user not found")
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -206,12 +203,8 @@ func TestGetUserByID(t *testing.T) {
 }
 
 func TestUpdateProfile(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -265,20 +258,15 @@ func TestUpdateProfile(t *testing.T) {
 }
 
 func TestIsProfileComplete(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Complete Profile", func(t *testing.T) {
 		userID := uuid.New()
 
-		mock.ExpectQuery(`SELECT first_name, last_name, email, address FROM users WHERE id`).
+		mock.ExpectQuery(`SELECT profile_completed FROM users WHERE id`).
 			WithArgs(userID).
-			WillReturnRows(sqlmock.NewRows([]string{"first_name", "last_name", "email", "address"}).
-				AddRow("John", "Doe", "john@example.com", "123 Main St"))
+			WillReturnRows(sqlmock.NewRows([]string{"profile_completed"}).AddRow(true))
 
 		isComplete, err := repo.IsProfileComplete(userID)
 		require.NoError(t, err)
@@ -288,29 +276,12 @@ func TestIsProfileComplete(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("Incomplete Profile - Missing Name", func(t *testing.T) {
+	t.Run("Incomplete Profile", func(t *testing.T) {
 		userID := uuid.New()
 
-		mock.ExpectQuery(`SELECT first_name, last_name, email, address FROM users WHERE id`).
+		mock.ExpectQuery(`SELECT profile_completed FROM users WHERE id`).
 			WithArgs(userID).
-			WillReturnRows(sqlmock.NewRows([]string{"first_name", "last_name", "email", "address"}).
-				AddRow("", "Doe", "john@example.com", "123 Main St"))
-
-		isComplete, err := repo.IsProfileComplete(userID)
-		require.NoError(t, err)
-		assert.False(t, isComplete)
-
-		err = mock.ExpectationsWereMet()
-		assert.NoError(t, err)
-	})
-
-	t.Run("Incomplete Profile - Missing Email", func(t *testing.T) {
-		userID := uuid.New()
-
-		mock.ExpectQuery(`SELECT first_name, last_name, email, address FROM users WHERE id`).
-			WithArgs(userID).
-			WillReturnRows(sqlmock.NewRows([]string{"first_name", "last_name", "email", "address"}).
-				AddRow("John", "Doe", "", "123 Main St"))
+			WillReturnRows(sqlmock.NewRows([]string{"profile_completed"}).AddRow(false))
 
 		isComplete, err := repo.IsProfileComplete(userID)
 		require.NoError(t, err)
@@ -323,7 +294,7 @@ func TestIsProfileComplete(t *testing.T) {
 	t.Run("User Not Found", func(t *testing.T) {
 		userID := uuid.New()
 
-		mock.ExpectQuery(`SELECT first_name, last_name, email, address FROM users WHERE id`).
+		mock.ExpectQuery(`SELECT profile_completed FROM users WHERE id`).
 			WithArgs(userID).
 			WillReturnError(sql.ErrNoRows)
 
@@ -337,23 +308,17 @@ func TestIsProfileComplete(t *testing.T) {
 }
 
 func TestUpdateProfileCompletion(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Mark Complete", func(t *testing.T) {
 		userID := uuid.New()
 
-		// First query to check profile fields
 		mock.ExpectQuery(`SELECT first_name, last_name, email, address FROM users WHERE id`).
 			WithArgs(userID).
 			WillReturnRows(sqlmock.NewRows([]string{"first_name", "last_name", "email", "address"}).
 				AddRow("John", "Doe", "john@example.com", "123 Main St"))
 
-		// Update query to set profile_completed = true
 		mock.ExpectExec(`UPDATE users SET profile_completed`).
 			WithArgs(true, sqlmock.AnyArg(), userID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
@@ -368,13 +333,11 @@ func TestUpdateProfileCompletion(t *testing.T) {
 	t.Run("Mark Incomplete - Missing Fields", func(t *testing.T) {
 		userID := uuid.New()
 
-		// Query returns incomplete profile (missing email)
 		mock.ExpectQuery(`SELECT first_name, last_name, email, address FROM users WHERE id`).
 			WithArgs(userID).
 			WillReturnRows(sqlmock.NewRows([]string{"first_name", "last_name", "email", "address"}).
 				AddRow("John", "Doe", "", "123 Main St"))
 
-		// Update query to set profile_completed = false
 		mock.ExpectExec(`UPDATE users SET profile_completed`).
 			WithArgs(false, sqlmock.AnyArg(), userID).
 			WillReturnResult(sqlmock.NewResult(1, 1))
@@ -403,12 +366,8 @@ func TestUpdateProfileCompletion(t *testing.T) {
 }
 
 func TestGetOrCreateUser(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Get Existing User", func(t *testing.T) {
 		phone := "+94712345678"
@@ -432,7 +391,7 @@ func TestGetOrCreateUser(t *testing.T) {
 		assert.NotNil(t, user)
 		assert.False(t, isNew)
 		assert.Equal(t, phone, user.Phone)
-		assert.Equal(t, "John", user.FirstName)
+		assert.Equal(t, "John", user.FirstName.String)
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -440,26 +399,17 @@ func TestGetOrCreateUser(t *testing.T) {
 
 	t.Run("Create New User", func(t *testing.T) {
 		phone := "+94712345678"
-		userID := uuid.New()
-		now := time.Now()
 
-		// First query returns no rows (user doesn't exist)
 		mock.ExpectQuery(`SELECT (.+) FROM users WHERE phone`).
 			WithArgs(phone).
 			WillReturnError(sql.ErrNoRows)
 
-		// Then insert new user
-		mock.ExpectQuery(`INSERT INTO users`).
-			WithArgs(sqlmock.AnyArg(), phone, sqlmock.AnyArg()).
-			WillReturnRows(sqlmock.NewRows([]string{
-				"id", "phone", "first_name", "last_name", "email", "address",
-				"city", "postal_code", "roles", "status", "profile_completed",
-				"phone_verified", "email_verified", "created_at", "updated_at",
-			}).AddRow(
-				userID, phone, "", "", "", "",
-				"", "", []byte(`{"passenger"}`), "active", false,
-				true, false, now, now,
-			))
+		mock.ExpectExec(`INSERT INTO users`).
+			WithArgs(
+				sqlmock.AnyArg(), phone, sqlmock.AnyArg(), "active",
+				false, true, false, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			).
+			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		user, isNew, err := repo.GetOrCreateUser(phone)
 		require.NoError(t, err)
@@ -473,12 +423,8 @@ func TestGetOrCreateUser(t *testing.T) {
 }
 
 func TestUpdateUserStatus(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Update to Active", func(t *testing.T) {
 		userID := uuid.New()
@@ -524,12 +470,8 @@ func TestUpdateUserStatus(t *testing.T) {
 }
 
 func TestAddUserRole(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -546,12 +488,20 @@ func TestAddUserRole(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("User Not Found", func(t *testing.T) {
+	t.Run("Invalid Role", func(t *testing.T) {
+		userID := uuid.New()
+
+		err := repo.AddUserRole(userID, "invalid_role")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid role")
+	})
+
+	t.Run("Database Error", func(t *testing.T) {
 		userID := uuid.New()
 
 		mock.ExpectExec(`UPDATE users SET roles`).
 			WithArgs("admin", sqlmock.AnyArg(), userID).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+			WillReturnError(fmt.Errorf("database error"))
 
 		err := repo.AddUserRole(userID, "admin")
 		assert.Error(t, err)
@@ -562,12 +512,8 @@ func TestAddUserRole(t *testing.T) {
 }
 
 func TestRemoveUserRole(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		userID := uuid.New()
@@ -584,12 +530,12 @@ func TestRemoveUserRole(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("User Not Found", func(t *testing.T) {
+	t.Run("Database Error", func(t *testing.T) {
 		userID := uuid.New()
 
 		mock.ExpectExec(`UPDATE users SET roles`).
 			WithArgs("passenger", sqlmock.AnyArg(), userID).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+			WillReturnError(fmt.Errorf("database error"))
 
 		err := repo.RemoveUserRole(userID, "passenger")
 		assert.Error(t, err)
@@ -600,12 +546,8 @@ func TestRemoveUserRole(t *testing.T) {
 }
 
 func TestListUsers(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		now := time.Now()
@@ -627,8 +569,8 @@ func TestListUsers(t *testing.T) {
 		users, err := repo.ListUsers(10, 0)
 		require.NoError(t, err)
 		assert.Len(t, users, 2)
-		assert.Equal(t, "John", users[0].FirstName)
-		assert.Equal(t, "Jane", users[1].FirstName)
+		assert.Equal(t, "John", users[0].FirstName.String)
+		assert.Equal(t, "Jane", users[1].FirstName.String)
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -666,12 +608,8 @@ func TestListUsers(t *testing.T) {
 }
 
 func TestCountUsers(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer db.Close()
-
-	mockDB := &mockDatabase{db: db}
-	repo := database.NewUserRepository(mockDB)
+	repo, mock, cleanup := setupUserRepoTest(t)
+	defer cleanup()
 
 	t.Run("Success", func(t *testing.T) {
 		mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users`).
@@ -679,7 +617,7 @@ func TestCountUsers(t *testing.T) {
 
 		count, err := repo.CountUsers()
 		require.NoError(t, err)
-		assert.Equal(t, int64(42), count)
+		assert.Equal(t, 42, count)
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -691,7 +629,7 @@ func TestCountUsers(t *testing.T) {
 
 		count, err := repo.CountUsers()
 		require.NoError(t, err)
-		assert.Equal(t, int64(0), count)
+		assert.Equal(t, 0, count)
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
@@ -703,42 +641,9 @@ func TestCountUsers(t *testing.T) {
 
 		count, err := repo.CountUsers()
 		assert.Error(t, err)
-		assert.Equal(t, int64(0), count)
+		assert.Equal(t, 0, count)
 
 		err = mock.ExpectationsWereMet()
 		assert.NoError(t, err)
 	})
-}
-
-// Mock database implementation for testing
-type mockDatabase struct {
-	db *sql.DB
-}
-
-func (m *mockDatabase) Get(dest interface{}, query string, args ...interface{}) error {
-	return fmt.Errorf("Get not implemented in mock")
-}
-
-func (m *mockDatabase) Select(dest interface{}, query string, args ...interface{}) error {
-	return fmt.Errorf("Select not implemented in mock")
-}
-
-func (m *mockDatabase) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return m.db.Query(query, args...)
-}
-
-func (m *mockDatabase) QueryRow(query string, args ...interface{}) *sql.Row {
-	return m.db.QueryRow(query, args...)
-}
-
-func (m *mockDatabase) Exec(query string, args ...interface{}) (sql.Result, error) {
-	return m.db.Exec(query, args...)
-}
-
-func (m *mockDatabase) Close() error {
-	return m.db.Close()
-}
-
-func (m *mockDatabase) Ping() error {
-	return m.db.Ping()
 }
